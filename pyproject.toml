@@ -1,0 +1,10 @@
+[project]
+name = "thesisv2"
+version = "0.1.0"
+description = "Add your description here"
+requires-python = ">=3.13"
+dependencies = [
+    "aiortc>=1.13.0",
+    "numpy>=2.3.1",
+    "websockets>=15.0.1",
+]
