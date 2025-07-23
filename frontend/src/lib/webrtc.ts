@@ -1,6 +1,6 @@
 // Configuration
 
-import type { Message } from "./message";
+import type { Message, SignalingMessage } from "./message";
 import { toWebSocketUrl } from "./url-utils";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL;
@@ -12,9 +12,10 @@ export const ICE_SERVERS = [
   // { urls: 'turn:your.turn.server:3478', username: 'user', credential: 'pass' }
 ];
 
-/** BadConfiguration error class
+/**
+ * BadConfiguration error
  *
- * This is when the user is not at fault, but the web admin did not configure
+ * This is when the web admin did not configure
  * the server correctly.
  */
 export class BadConfiguration extends Error {
@@ -31,24 +32,112 @@ export function createWebRTCClient({
 }: {
   signalingUrl: string;
   iceServers: RTCIceServer[];
-  onConnectionChange: (state: "connected" | "disconnected") => void;
+  onConnectionChange: (
+    state: "ready" | "connected" | "disconnected" | "failed" | "connecting"
+  ) => void;
 }) {
   if (!signalingUrl) throw new Error("Invalid signaling URL");
   if (!iceServers || !Array.isArray(iceServers)) {
     throw new Error("Invalid ICE servers configuration");
   }
 
-  let localStream: MediaStream;
+  onConnectionChange("disconnected");
 
-  const ws = initWebSocket(handleSignal);
-  const pc = new RTCPeerConnection({ iceServers });
+  let localStream: MediaStream, pc: RTCPeerConnection;
+
+  async function handleWebsocketSignaling(msg: SignalingMessage) {
+    if (msg.type === "answer") {
+      console.log("Received answer:", msg.sdp);
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+    } else if (msg.type === "ice_candidate") {
+      console.log("Received ICE candidate:", msg.candidate);
+      await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+    }
+  }
+
+  // TODO: handle websocket over entire website.
+  let ws: WebSocket | null = initWebSocket(handleWebsocketSignaling);
+
+  ws.onopen = () => {
+    console.log("WebSocket connection established");
+    onConnectionChange("ready");
+  };
+
+  ws.onclose = (evt) => {
+    if (evt.code == 3001) {
+      console.log("ws closed");
+      ws = null;
+    } else {
+      ws = null;
+      console.log("ws connection error");
+    }
+    console.log("WebSocket connection closed");
+    onConnectionChange("disconnected");
+  };
+
+  ws.onerror = (error) => {
+    console.error("WebSocket error:", error);
+    onConnectionChange("failed");
+  };
 
   async function startAudioStream() {
+    if (!ws || ws.readyState !== WebSocket.OPEN) {
+      throw new Error("WebSocket connection not established");
+    }
+
+    onConnectionChange("connecting");
+    console.log("Starting audio stream...");
+    pc = new RTCPeerConnection({ iceServers });
+
+    pc.onicecandidate = (event) => {
+      if (event.candidate && ws) {
+        console.log("Sending ICE candidate:", event.candidate);
+        sendMessage(
+          {
+            type: "ice_candidate",
+            candidate: event.candidate,
+          },
+          ws
+        );
+      }
+    };
+
+    pc.onconnectionstatechange = () => {
+      if (pc.connectionState === "connected") {
+        onConnectionChange("connected");
+      } else if (pc.connectionState === "disconnected") {
+        // If disconnected, check if we should notify the user
+        onConnectionChange("disconnected");
+      }
+      if (pc.connectionState === "failed") {
+        onConnectionChange("failed");
+      }
+    };
+
     localStream = await setupLocalStream();
+
+    // Add local stream to peer
+    console.log("Adding local stream to peer connection");
+    localStream.getTracks().forEach((track) => {
+      pc.addTrack(track, localStream);
+    });
+
+    console.log("Creating offer...");
+    if (!ws) {
+      throw new Error("WebSocket connection not established");
+    }
+    await createAndSendOffer(pc, ws);
+    console.log("Offer sent, waiting for answer...");
   }
 
   async function stopAudioStream() {
+    onConnectionChange("disconnected");
     localStream?.getTracks().forEach((track) => track.stop());
+
+    // Close out all the connections
+    if (pc) {
+      pc.close();
+    }
   }
 
   return { startAudioStream, stopAudioStream };
@@ -98,99 +187,23 @@ async function setupLocalStream() {
  * Send signaling data over WebSocket
  * @param {Object} message - { sdp } or { candidate }
  */
-export function sendSignal(message: Message, ws: WebSocket) {
+export function sendMessage(message: Message, ws: WebSocket) {
   if (ws && ws.readyState === WebSocket.OPEN) {
     ws.send(JSON.stringify(message));
   }
 }
-
-/**
- * Create RTCPeerConnection and bind event handlers
- * @param {Object} config - ICE servers config
- * @param {Object} callbacks - { onIceCandidate, onTrack }
- */
-export function initPeerConnection(config = {}, callbacks = {}) {
-  pc = new RTCPeerConnection(config);
-  pc.onicecandidate = ({ candidate }) => callbacks.onIceCandidate(candidate);
-  pc.ontrack = (event) => callbacks.onTrack(event.streams[0]);
-  return pc;
-}
-
-/**
- * Get user media (camera + mic)
- * @returns {Promise<MediaStream>}
- */
-export async function getLocalStream() {
-  localStream = await navigator.mediaDevices.getUserMedia({
-    video: true,
-    audio: true,
-  });
-  return localStream;
-}
-
-/**
- * Add local tracks to RTCPeerConnection
- * @param {RTCPeerConnection} peerConnection
- * @param {MediaStream} stream
- */
-export function addLocalTracks(peerConnection, stream) {
-  stream.getTracks().forEach((track) => peerConnection.addTrack(track, stream));
-}
-
-/**
- * Handle incoming signaling messages
- * @param {Object} message
- */
-export async function handleSignal(message) {
-  if (!pc) return;
-  if (message.sdp) {
-    await pc.setRemoteDescription(new RTCSessionDescription(message.sdp));
-    if (message.sdp.type === "offer") {
-      const answer = await pc.createAnswer();
-      await pc.setLocalDescription(answer);
-      sendSignal({ sdp: pc.localDescription });
-    }
-  } else if (message.candidate) {
-    await pc.addIceCandidate(new RTCIceCandidate(message.candidate));
-  }
-}
-
 /**
  * Create and send an offer
  */
-export async function createAndSendOffer() {
+export async function createAndSendOffer(pc: RTCPeerConnection, ws: WebSocket) {
   if (!pc) throw new Error("PeerConnection not initialized");
   const offer = await pc.createOffer();
   await pc.setLocalDescription(offer);
-  sendSignal({ sdp: pc.localDescription });
-}
-
-/**
- * Close connections and cleanup
- */
-export function closeConnections() {
-  if (pc) pc.close();
-  if (ws) ws.close();
-  pc = null;
-  ws = null;
-  localStream = null;
-}
-
-/**
- * Hook to attach event handlers (optional)
- * @param {Object} cb - { onRemoteStream(stream), onLocalStream(stream) }
- */
-export async function startWebRTC(cb = {}) {
-  initWebSocket(handleSignal);
-  const stream = await getLocalStream();
-  cb.onLocalStream?.(stream);
-  const connection = initPeerConnection(
-    { iceServers: ICE_SERVERS },
+  sendMessage(
     {
-      onIceCandidate: (candidate) => sendSignal({ candidate }),
-      onTrack: (remoteStream) => cb.onRemoteStream?.(remoteStream),
-    }
+      type: "offer",
+      sdp: pc.localDescription as RTCSessionDescriptionInit,
+    },
+    ws
   );
-  addLocalTracks(connection, stream);
-  return connection;
 }

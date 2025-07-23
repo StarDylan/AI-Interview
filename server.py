@@ -220,10 +220,10 @@ async def main():
     """Start the WebRTC server"""
     server = WebRTCServer()
 
-    logger.info("Starting WebRTC server on ws://localhost:8765")
+    logger.info("Starting WebRTC server on ws://localhost:3000")
 
     # Start WebSocket server for signaling
-    async with websockets.serve(server.handle_client, "localhost", 8765):
+    async with websockets.serve(server.handle_client, "localhost", 3000):
         logger.info("Server started. Waiting for connections...")
         # Keep server running
         await asyncio.Future()  # Run forever

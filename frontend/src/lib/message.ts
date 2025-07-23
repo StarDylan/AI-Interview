@@ -5,13 +5,13 @@ export const MessageType = {
 } as const;
 
 interface OfferMessage {
-  type: number;
-  sdp: string;
+  type: typeof MessageType.OFFER;
+  sdp: RTCSessionDescriptionInit;
 }
 
 interface AnswerMessage {
   type: typeof MessageType.ANSWER;
-  sdp: string;
+  sdp: RTCSessionDescriptionInit;
 }
 
 interface IceCandidateMessage {
@@ -19,6 +19,9 @@ interface IceCandidateMessage {
   candidate: RTCIceCandidateInit;
 }
 
-type SignalingMessage = OfferMessage | AnswerMessage | IceCandidateMessage;
+export type SignalingMessage =
+  | OfferMessage
+  | AnswerMessage
+  | IceCandidateMessage;
 
 export type Message = SignalingMessage;
