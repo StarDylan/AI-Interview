@@ -9,7 +9,6 @@ function App() {
     () =>
       createWebRTCClient({
         signalingUrl: "ws://localhost:8765",
-        iceServers: [{ urls: "stun:stun.l.google.com:19302" }],
         onConnectionChange: setConnectionState,
       }),
     []

@@ -27,19 +27,14 @@ export class BadConfiguration extends Error {
 
 export function createWebRTCClient({
   signalingUrl,
-  iceServers,
   onConnectionChange,
 }: {
   signalingUrl: string;
-  iceServers: RTCIceServer[];
   onConnectionChange: (
     state: "ready" | "connected" | "disconnected" | "failed" | "connecting"
   ) => void;
 }) {
   if (!signalingUrl) throw new Error("Invalid signaling URL");
-  if (!iceServers || !Array.isArray(iceServers)) {
-    throw new Error("Invalid ICE servers configuration");
-  }
 
   onConnectionChange("disconnected");
 
@@ -87,7 +82,7 @@ export function createWebRTCClient({
 
     onConnectionChange("connecting");
     console.log("Starting audio stream...");
-    pc = new RTCPeerConnection({ iceServers });
+    pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
     pc.onicecandidate = (event) => {
       if (event.candidate && ws) {
