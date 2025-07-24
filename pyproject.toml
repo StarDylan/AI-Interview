@@ -6,5 +6,8 @@ requires-python = ">=3.13"
 dependencies = [
     "aiortc>=1.13.0",
     "numpy>=2.3.1",
+    "scipy>=1.16.0",
+    "streamz>=0.6.4",
+    "vosk>=0.3.45",
     "websockets>=15.0.1",
 ]
