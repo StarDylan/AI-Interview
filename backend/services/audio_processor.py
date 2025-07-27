@@ -9,7 +9,7 @@ from typing import Optional, Union
 from av.audio.frame import AudioFrame
 
 from config.settings import (
-    SAMPLE_RATE, NUM_CHANNELS, SAMPLE_WIDTH, TARGET_SAMPLE_RATE,
+    NUM_CHANNELS, SAMPLE_WIDTH, TARGET_SAMPLE_RATE,
     AUDIO_RECORDINGS_DIR
 )
 from models.session import TranscriptionSession
@@ -21,13 +21,21 @@ def resample_audio(pcm_data: np.ndarray, orig_rate: int, target_rate: int) -> np
     resampled = scipy.signal.resample_poly(pcm_data, target_rate, orig_rate).astype(np.int16)
     return resampled
 
-def stereo_to_mono(stereo_pcm: np.ndarray) -> np.ndarray:
-    """Convert stereo audio to mono"""
-    if len(stereo_pcm.shape) > 1 and stereo_pcm.shape[1] == 2:
-        mono_data = stereo_pcm.reshape(-1, 2).mean(axis=1).astype(np.int16)
-    else:
-        mono_data = stereo_pcm.astype(np.int16)
-    return mono_data
+def stereo_to_mono(audio: np.ndarray) -> np.ndarray:
+    # Handle (1, N) interleaved stereo
+    if audio.ndim == 2 and audio.shape[0] == 1:
+        audio = audio[0]  # Flatten (1, N) → (N,)
+    
+    if audio.ndim == 1 and audio.shape[0] % 2 == 0:
+        # Interleaved stereo: (L R L R ...) → reshape then average
+        audio = audio.reshape(-1, 2)
+        return audio.mean(axis=1).astype(np.int16)
+
+    elif audio.ndim == 2 and audio.shape[1] == 2:
+        # Already shaped correctly (samples, channels)
+        return audio.mean(axis=1).astype(np.int16)
+
+    return audio.astype(np.int16)  # Fallback: assume mono
 
 class SessionAudioProcessor:
     """Process incoming audio frames with per-session isolation"""
@@ -37,8 +45,7 @@ class SessionAudioProcessor:
         self.frame_count = 0
         self.save_audio = save_audio
         self.output_dir = Path(output_dir)
-        self.sample_rate = None
-        self.channels = None
+        self.channels = 1
 
         # Create output directory if it doesn't exist
         if self.save_audio:
@@ -49,23 +56,22 @@ class SessionAudioProcessor:
         if not self.session.is_active:
             logger.warning(f"Attempted to process frame for inactive session {self.session.session_id[:8]}")
             return np.array([])
+            
+
 
         # Convert frame to numpy array
         audio_array = frame.to_ndarray()
         
+        print("Frame sample rate:", frame.sample_rate)
+        print("Frame layout:", frame.layout.name)
+        print("Audio array shape:", audio_array.shape)
+        print("Frame samples:", frame.samples)
         # Convert to mono if stereo
-        if len(audio_array.shape) > 1 and audio_array.shape[1] > 1:
-            audio_array = stereo_to_mono(audio_array)
+        audio_array = stereo_to_mono(audio_array)
         
         # Resample if necessary
         if frame.sample_rate != TARGET_SAMPLE_RATE:
             audio_array = resample_audio(audio_array, frame.sample_rate, TARGET_SAMPLE_RATE)
-
-        # Initialize session audio properties on first frame
-        if self.sample_rate is None:
-            self.sample_rate = TARGET_SAMPLE_RATE
-            self.channels = 1
-            logger.info(f"Session {self.session.session_id[:8]} initialized with sample rate: {self.sample_rate}")
 
         # Add to session buffer
         if self.save_audio:
@@ -77,7 +83,7 @@ class SessionAudioProcessor:
         if self.frame_count % 100 == 0:
             logger.debug(
                 f"Session {self.session.session_id[:8]}: Processed {self.frame_count} frames. "
-                f"Shape: {audio_array.shape}, Sample rate: {self.sample_rate}"
+                f"Shape: {audio_array.shape}, Sample rate: {TARGET_SAMPLE_RATE}, Channels: {self.channels}"
             )
 
         return audio_array
@@ -98,22 +104,14 @@ class SessionAudioProcessor:
             # Concatenate all audio frames
             full_audio = np.concatenate(self.session.audio_buffer, axis=0)
 
-            # Convert to 16-bit PCM format
-            if full_audio.dtype != np.int16:
-                if full_audio.dtype in [np.float32, np.float64]:
-                    full_audio = np.clip(full_audio, -1.0, 1.0)
-                    full_audio = (full_audio * 32767).astype(np.int16)
-                else:
-                    full_audio = full_audio.astype(np.int16)
-
             # Save as WAV file
             with wave.open(str(filepath), "wb") as wav_file:
                 wav_file.setnchannels(self.channels)
                 wav_file.setsampwidth(SAMPLE_WIDTH)
-                wav_file.setframerate(self.sample_rate)
+                wav_file.setframerate(TARGET_SAMPLE_RATE)
                 wav_file.writeframes(full_audio.tobytes())
 
-            duration = len(full_audio) / self.sample_rate
+            duration = len(full_audio) / TARGET_SAMPLE_RATE
             logger.info(f"Session {self.session.session_id[:8]} audio saved to: {filepath}")
             logger.info(f"Duration: {duration:.2f} seconds, Frames: {len(self.session.audio_buffer)}")
             
@@ -122,7 +120,7 @@ class SessionAudioProcessor:
                 "audio_file": str(filepath),
                 "duration_seconds": duration,
                 "total_frames": len(self.session.audio_buffer),
-                "sample_rate": self.sample_rate,
+                "sample_rate": TARGET_SAMPLE_RATE,
                 "channels": self.channels
             })
             

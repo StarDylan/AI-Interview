@@ -8,7 +8,7 @@ with per-session isolation and proper resource management.
 
 import asyncio
 import logging
-import websockets
+from websockets.asyncio.server import serve as websocket_serve
 from pathlib import Path
 
 from config.settings import SERVER_HOST, SERVER_PORT
@@ -44,10 +44,11 @@ async def main():
         logger.info(f"Starting secure WebSocket server on wss://{SERVER_HOST}:{SERVER_PORT}")
         
         # Start WebSocket server
-        async with websockets.serve(
+        async with websocket_serve(
             server.handle_client,
             SERVER_HOST,
-            SERVER_PORT
+            SERVER_PORT,
+            ssl=ssl_context,
         ):
             logger.info("Server started successfully. Waiting for connections...")
             
