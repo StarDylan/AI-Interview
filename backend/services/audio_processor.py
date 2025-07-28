@@ -61,11 +61,6 @@ class SessionAudioProcessor:
 
         # Convert frame to numpy array
         audio_array = frame.to_ndarray()
-        
-        print("Frame sample rate:", frame.sample_rate)
-        print("Frame layout:", frame.layout.name)
-        print("Audio array shape:", audio_array.shape)
-        print("Frame samples:", frame.samples)
         # Convert to mono if stereo
         audio_array = stereo_to_mono(audio_array)
         

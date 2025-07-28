@@ -1,113 +1,125 @@
-# WebRTC Audio Streaming
+# Real-time SAR Interview Assistant
 
-A real-time audio streaming system using WebRTC with a browser client and Python server.
+A real-time, end-to-end system for Search and Rescue operations that suggests context-aware follow-up questions and extracts actionable clues during interviews with missing persons' contacts.
 
-## Features
+## Vision
 
-- Browser-based audio capture using getUserMedia()
-- WebRTC peer-to-peer connection for audio streaming
-- WebSocket signaling for SDP exchange and ICE candidates
-- Python server using aiortc for WebRTC handling
-- Real-time audio frame processing with numpy arrays
+In Search and Rescue (SAR) operations, time pressure and inexperience can lead to missed opportunities during interviews with a missing person's friends and family. This system leverages large language models (LLMs), agentic design patterns, and integration with the IntelliSAR platform to assist interviewers in surfacing more complete and relevant information. It compiles key insights into a structured clue log, ready for human review, refinement, and dissemination to the rest of the team.
 
-## Setup
-
-### 1. Install uv (if not already installed)
-
-```bash
-# On Windows
-powershell -c "irm https://astral.sh/uv/install.ps1 | iex"
-
-# Or using pip
-pip install uv
-```
-
-### 2. Install Python Dependencies
-
-```bash
-# Initialize project and add dependencies
-uv init --no-readme
-uv add aiortc websockets numpy
-```
-
-Or if you prefer to use the requirements file:
-
-```bash
-uv pip install -r requirements.txt
-```
-
-### 3. Start the Python Server
-
-```bash
-uv run server.py
-```
-
-The server will start on `ws://localhost:8765`
-
-### 4. Open the Browser Client
-
-Open `index.html` in your web browser or serve it via a local HTTP server:
-
-```bash
-# Using Python's built-in server
-python -m http.server 8000
-```
-
-Then navigate to `http://localhost:8000`
-
-## Usage
-
-1. Click "Start Audio Stream" to begin capturing audio
-2. Grant microphone permissions when prompted
-3. The client will connect to the server and establish a WebRTC connection
-4. Audio frames will be streamed to the Python server for processing
+**Ultimate Goal:** Accelerate clue discovery and reduce the likelihood of critical information being overlooked in time-sensitive SAR missions.
 
 ## Architecture
 
-### Browser Client (`client.js`)
+### Backend (`/backend`)
 
-- Captures audio using `getUserMedia()`
-- Creates RTCPeerConnection for WebRTC
-- Handles WebSocket signaling for SDP offers/answers and ICE candidates
-- Manages connection state and UI updates
+- **Python-based** transcription and processing server
+- **WebRTC** real-time audio streaming
+- **Vosk** speech-to-text processing
+- **WebSocket** communication
+- Structured data models with **Pydantic**
 
-### Python Server (`server.py`)
+### Frontend (`/frontend`)
 
-- Uses `aiortc` for WebRTC peer connection handling
-- WebSocket server for signaling protocol
-- Processes incoming audio frames as numpy arrays
-- Extensible audio processing pipeline
+- **React + TypeScript** user interface
+- **Vite** development server
+- **TailwindCSS** styling
+- Real-time WebRTC audio capture and streaming
 
-## Audio Processing
+### Tech Stack
 
-The server receives audio frames that can be processed for:
+- **AI/ML:** LangGraph, LangChain, Langfuse
+- **Backend:** Python 3.13+, WebRTC (aiortc), WebSockets, Vosk
+- **Frontend:** React 19, TypeScript, Vite, TailwindCSS
+- **Real-time:** WebRTC for audio streaming
+- **Data:** Pydantic for structured models
 
-- Speech recognition
-- Audio analysis and visualization
-- Real-time audio effects
-- Recording and storage
-- Machine learning inference
+## Prerequisites
 
-Modify the `AudioProcessor.process_frame()` method to add your custom audio processing logic.
+- **Python 3.13+**
+- **Node.js** (for frontend)
+- **pnpm** (package manager)
+- **mkcert** (for SSL certificates)
+- **uv** (Python package manager)
 
-## Configuration
+## Installation & Setup
 
-### Audio Settings
+### 1. SSL Certificates
 
-The client requests audio with:
+Generate local SSL certificates for HTTPS (required for WebRTC):
 
-- Echo cancellation enabled
-- Noise suppression enabled
-- Auto gain control enabled
+```bash
+just create-cert
+```
 
-### WebRTC Configuration
+### 2. Backend Setup
 
-- Uses Google's STUN server for NAT traversal
-- Supports ICE candidate exchange for connectivity
+```bash
+cd backend
+uv sync
+```
 
-## Troubleshooting
+### 3. Frontend Setup
 
-- Ensure microphone permissions are granted
-- Check that the Python server is running on port 8765
-- Verify WebSocket connection in browser developer tools
-- Check server logs for WebRTC connection status
+```bash
+cd frontend
+pnpm install
+```
+
+### 4. Vosk Model Download
+
+The system uses Vosk for speech recognition. Please download a model from https://alphacephei.com/vosk/models and place into `backend/vosk_models/`.
+
+## Development
+
+### Start Backend Server
+
+```bash
+cd backend
+uv run python server.py
+```
+
+### Start Frontend Development Server
+
+```bash
+cd frontend
+pnpm dev
+```
+
+The frontend will be available at `https://localhost:5173` and the backend WebRTC server runs on the configured port.
+
+## Project Structure
+
+```
+├── backend/                    # Python backend
+│   ├── config/                # Configuration management
+│   ├── handlers/              # WebRTC and protocol handlers
+│   ├── models/                # Data models (Pydantic)
+│   ├── services/              # Core business logic
+│   ├── utils/                 # Utility functions
+│   ├── vosk_models/           # Speech recognition models
+│   ├── audio_recordings/      # Recorded audio files
+│   ├── transcriptions/        # Generated transcripts
+│   └── server.py              # Main server entry point
+├── frontend/                  # React frontend
+│   ├── src/                   # Source code
+│   ├── public/                # Static assets
+│   └── package.json           # Dependencies
+├── cert/                      # SSL certificates
+├── Justfile                   # Task runner commands
+└── README.md                  # This file
+```
+
+## Features
+
+- **Real-time Audio Processing:** WebRTC-based audio capture and streaming
+- **Speech-to-Text:** Vosk-powered transcription
+- **Structured Data:** Pydantic models for consistent data handling
+- **Secure Communication:** HTTPS/WSS with self-signed certificates
+- **Development Tools:** Hot reload, TypeScript support, modern tooling
+
+## Development Notes
+
+- The system generates timestamped audio recordings and transcriptions
+- SSL certificates are required for WebRTC functionality
+- Both frontend and backend support hot reload during development
+- Transcriptions are saved in both JSON and text formats for analysis
