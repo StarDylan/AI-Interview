@@ -7,13 +7,13 @@ with per-session isolation and proper resource management.
 """
 
 import asyncio
+import os
 import logging
 from websockets.asyncio.server import serve as websocket_serve
 from pathlib import Path
 
 from config.settings import SERVER_HOST, SERVER_PORT
 from handlers.webrtc_handler import WebRTCServer
-from utils.ssl_utils import create_ssl_context
 
 # Configure logging
 logging.basicConfig(
@@ -34,10 +34,7 @@ async def main():
     try:
         # Initialize server
         server = WebRTCServer()
-        
-        # Create SSL context
-        ssl_context = create_ssl_context()
-        
+
         # Start cleanup task
         cleanup_task = asyncio.create_task(server.cleanup_inactive_sessions())
         
@@ -48,7 +45,6 @@ async def main():
             server.handle_client,
             SERVER_HOST,
             SERVER_PORT,
-            ssl=ssl_context,
         ):
             logger.info("Server started successfully. Waiting for connections...")
             

@@ -8,7 +8,6 @@ function App() {
   const webRTCClient = useMemo(
     () =>
       createWebRTCClient({
-        signalingUrl: "ws://localhost:8765",
         onConnectionChange: setConnectionState,
       }),
     []

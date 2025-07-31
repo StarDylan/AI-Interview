@@ -26,15 +26,13 @@ export class BadConfiguration extends Error {
 }
 
 export function createWebRTCClient({
-  signalingUrl,
   onConnectionChange,
 }: {
-  signalingUrl: string;
   onConnectionChange: (
     state: "ready" | "connected" | "disconnected" | "failed" | "connecting"
   ) => void;
 }) {
-  if (!signalingUrl) throw new Error("Invalid signaling URL");
+  if (!SIGNALING_SERVER_URL) throw new Error("Invalid signaling URL");
 
   onConnectionChange("disconnected");
 
