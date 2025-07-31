@@ -7,11 +7,9 @@ with per-session isolation and proper resource management.
 """
 
 import asyncio
-import os
 import logging
-from websockets.asyncio.server import serve as websocket_serve
-from pathlib import Path
 
+from websockets.asyncio.server import serve as websocket_serve
 from config.settings import SERVER_HOST, SERVER_PORT
 from handlers.webrtc_handler import WebRTCServer
 

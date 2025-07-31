@@ -11,3 +11,14 @@ dependencies = [
     "vosk>=0.3.45",
     "websockets>=15.0.1",
 ]
+
+[tool.pyrefly]
+project-includes = ["**/*"]
+project-excludes = ['**/*venv/**\*']
+
+[dependency-groups]
+dev = [
+    "ruff>=0.12.7",
+]
+
+[tool]

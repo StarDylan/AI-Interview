@@ -2,9 +2,8 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict, Any
+from typing import Optional, Dict
 from vosk import Model, KaldiRecognizer
-import streamz
 
 from config.settings import VOSK_MODEL_PATH, TARGET_SAMPLE_RATE, TRANSCRIPTIONS_DIR
 from models.session import TranscriptionSession

@@ -1,7 +1,7 @@
 import json
 import logging
 import asyncio
-from typing import Dict, Set
+from typing import Set
 import websockets
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 

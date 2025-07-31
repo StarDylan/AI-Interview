@@ -1,15 +1,13 @@
-import os
 import wave
 import logging
 import numpy as np
 import scipy.signal
-from datetime import datetime
 from pathlib import Path
-from typing import Optional, Union
+from typing import Optional
 from av.audio.frame import AudioFrame
 
 from config.settings import (
-    NUM_CHANNELS, SAMPLE_WIDTH, TARGET_SAMPLE_RATE,
+    SAMPLE_WIDTH, TARGET_SAMPLE_RATE,
     AUDIO_RECORDINGS_DIR
 )
 from models.session import TranscriptionSession
