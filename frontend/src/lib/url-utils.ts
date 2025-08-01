@@ -17,7 +17,7 @@ export function toWebSocketUrl(backendUrl: string): string {
 
     if (!hasProtocol) {
       throw new Error(
-        "Backend URL must include a protocol (http:// or https://)"
+        "Backend URL must include a protocol (http:// or https://)",
       );
     }
 
@@ -28,15 +28,15 @@ export function toWebSocketUrl(backendUrl: string): string {
       url.protocol === "http:"
         ? "ws:"
         : url.protocol === "https:"
-        ? "wss:"
-        : url.protocol;
+          ? "wss:"
+          : url.protocol;
 
     return url.toString();
   } catch (err: unknown) {
     throw new Error(
       `Failed to parse backend URL: ${
         err instanceof Error ? err.message : String(err)
-      }`
+      }`,
     );
   }
 }

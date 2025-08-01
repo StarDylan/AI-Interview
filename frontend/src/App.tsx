@@ -10,7 +10,7 @@ function App() {
       createWebRTCClient({
         onConnectionChange: setConnectionState,
       }),
-    []
+    [],
   );
 
   return (

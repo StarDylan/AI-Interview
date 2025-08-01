@@ -29,7 +29,7 @@ export function createWebRTCClient({
   onConnectionChange,
 }: {
   onConnectionChange: (
-    state: "ready" | "connected" | "disconnected" | "failed" | "connecting"
+    state: "ready" | "connected" | "disconnected" | "failed" | "connecting",
   ) => void;
 }) {
   if (!SIGNALING_SERVER_URL) throw new Error("Invalid signaling URL");
@@ -90,7 +90,7 @@ export function createWebRTCClient({
             type: "ice_candidate",
             candidate: event.candidate,
           },
-          ws
+          ws,
         );
       }
     };
@@ -162,7 +162,7 @@ export function initWebSocket(onSignal: (msg: Message) => void) {
 async function setupLocalStream() {
   if (window.isSecureContext === false) {
     throw new BadConfiguration(
-      "WebRTC requires a secure context (HTTPS or localhost)"
+      "WebRTC requires a secure context (HTTPS or localhost)",
     );
   }
 
@@ -197,6 +197,6 @@ export async function createAndSendOffer(pc: RTCPeerConnection, ws: WebSocket) {
       type: "offer",
       sdp: pc.localDescription as RTCSessionDescriptionInit,
     },
-    ws
+    ws,
   );
 }
