@@ -7,6 +7,7 @@ dependencies = [
     "aiortc>=1.13.0",
     "numpy>=2.3.1",
     "scipy>=1.16.0",
+    "scipy-stubs>=1.16.1.0",
     "streamz>=0.6.4",
     "vosk>=0.3.45",
     "websockets>=15.0.1",
@@ -15,6 +16,7 @@ dependencies = [
 [tool.pyrefly]
 project-includes = ["**/*"]
 project-excludes = ['**/*venv/**\*']
+search-path = [".", ".venv/Lib/site-packages/"]
 
 [dependency-groups]
 dev = [

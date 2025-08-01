@@ -2,7 +2,7 @@ import json
 import logging
 import os
 from pathlib import Path
-from typing import Optional, Dict
+from typing import Optional, Dict, Any
 from vosk import Model, KaldiRecognizer
 
 from config.settings import VOSK_MODEL_PATH, TARGET_SAMPLE_RATE, TRANSCRIPTIONS_DIR
@@ -15,8 +15,8 @@ class SessionTranscriptionService:
     
     def __init__(self, session: TranscriptionSession):
         self.session = session
-        self.model = None
-        self.recognizer = None
+        self.model: Optional[Any] = None
+        self.recognizer: Optional[Any] = None
         self.audio_buffer = bytearray()
         self.transcriptions_dir = Path(TRANSCRIPTIONS_DIR)
         
@@ -49,6 +49,10 @@ class SessionTranscriptionService:
         """Process audio chunk and return transcription if available"""
         if not self.session.is_active:
             logger.warning(f"Attempted to process audio for inactive session {self.session.session_id[:8]}")
+            return None
+        
+        if not self.recognizer:
+            logger.error(f"Recognizer not initialized for session {self.session.session_id[:8]}")
             return None
         
         try:

@@ -1,7 +1,8 @@
+from services.transcription_service import SessionTranscriptionService
 import json
 import logging
 import asyncio
-from typing import Set
+from typing import Set, Optional
 import websockets
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
@@ -17,10 +18,10 @@ class WebRTCConnectionHandler:
     def __init__(self, websocket, transcription_manager: GlobalTranscriptionManager):
         self.websocket = websocket
         self.transcription_manager = transcription_manager
-        self.session = None
-        self.audio_processor = None
-        self.transcription_service = None
-        self.peer_connection = None
+        self.session: Optional[TranscriptionSession] = None
+        self.audio_processor: Optional[SessionAudioProcessor] = None
+        self.transcription_service: Optional[SessionTranscriptionService] = None
+        self.peer_connection: Optional[RTCPeerConnection] = None
         
         logger.info(f"New WebRTC connection handler created for {websocket.remote_address}")
     
@@ -52,6 +53,9 @@ class WebRTCConnectionHandler:
     
     async def _handle_offer(self, data):
         """Handle SDP offer from client"""
+        if not self.session:
+            logger.error("Session not initialized")
+            return
         logger.info(f"Received offer for session {self.session.session_id[:8]}")
 
         # Create peer connection
@@ -60,6 +64,9 @@ class WebRTCConnectionHandler:
         # Set up audio track handler
         @self.peer_connection.on("track")
         async def on_track(track):
+            if not self.session:
+                logger.error("Session not initialized")
+                return
             logger.info(f"Session {self.session.session_id[:8]}: Received track: {track.kind}")
 
             if track.kind == "audio":
@@ -103,7 +110,7 @@ class WebRTCConnectionHandler:
 
     async def _handle_ice_candidate(self, data):
         """Handle ICE candidate from client"""
-        if self.peer_connection:
+        if self.peer_connection and self.session:
             try:
                 parsed = self._parse_candidate(data["candidate"]["candidate"])
 
@@ -113,13 +120,13 @@ class WebRTCConnectionHandler:
                     return
 
                 candidate = RTCIceCandidate(
-                    foundation=parsed["foundation"],
+                    foundation=str(parsed["foundation"]),
                     component=parsed["component"],
-                    protocol=parsed["protocol"],
+                    protocol=str(parsed["protocol"]),
                     priority=parsed["priority"],
-                    ip=parsed["ip"],
+                    ip=str(parsed["ip"]),
                     port=parsed["port"],
-                    type=parsed["type"],
+                    type=str(parsed["type"]),
                     sdpMid=data["candidate"]["sdpMid"],
                     sdpMLineIndex=data["candidate"]["sdpMLineIndex"]
                 )
@@ -131,26 +138,31 @@ class WebRTCConnectionHandler:
     
     async def _process_audio_track(self, track):
         """Process incoming audio frames from WebRTC track"""
+        if not self.audio_processor or not self.transcription_service or not self.session:
+            logger.error("Audio processing services not initialized")
+            return
+            
         try:
-            while True:
-                frame = await track.recv()
-                
-                # Process audio frame
-                audio_array = self.audio_processor.process_frame(frame)
-                
-                # Convert to bytes for transcription
-                if len(audio_array) > 0:
-                    audio_bytes = audio_array.tobytes()
-                    
-                    # Process transcription
-                    transcription = self.transcription_service.process_audio_chunk(audio_bytes)
-                    
-                    # Optionally send transcription back to client
-                    if transcription:
-                        await self._send_transcription_update(transcription)
-        
+                while True:
+                    frame = await track.recv()
+                    if self.audio_processor and self.transcription_service:
+                        
+                        # Process audio frame
+                        audio_array = self.audio_processor.process_frame(frame)
+                        
+                        # Convert to bytes for transcription
+                        if len(audio_array) > 0:
+                            audio_bytes = audio_array.tobytes()
+                            
+                            # Process transcription
+                            transcription = self.transcription_service.process_audio_chunk(audio_bytes)
+                            
+                            # Optionally send transcription back to client
+                            if transcription:
+                                await self._send_transcription_update(transcription)
+            
         except Exception as e:
-            logger.error(f"Error processing audio track for session {self.session.session_id[:8]}: {e}")
+            logger.error(f"Error processing audio track for session {self.session.session_id[:8] if self.session else 'unknown'}: {e}")
         
         finally:
             # Finalize session when audio stream ends
@@ -158,13 +170,17 @@ class WebRTCConnectionHandler:
     
     async def _send_transcription_update(self, text: str):
         """Send transcription update to client"""
+        if not self.session:
+            logger.error("Session not initialized")
+            return
+            
         try:
             message = {
                 "type": "transcription",
                 "data": {
                     "text": text,
                     "session_id": self.session.session_id,
-                    "timestamp": self.session.transcription_buffer[-1]["timestamp"]
+                    "timestamp": self.session.transcription_buffer[-1]["timestamp"] if self.session.transcription_buffer else None
                 }
             }
             await self.websocket.send(json.dumps(message))
@@ -194,6 +210,10 @@ class WebRTCConnectionHandler:
     
     async def _send_final_transcription(self, final_text: str):
         """Send final transcription result to client"""
+        if not self.session:
+            logger.error("Session not initialized")
+            return
+            
         try:
             message = {
                 "type": "final_transcription",
@@ -233,7 +253,7 @@ class WebRTCServer:
         await handler.initialize_session()
         
         self.connections.add(handler)
-        logger.info(f"New client connected: {websocket.remote_address}, Session: {handler.session.session_id[:8]}")
+        logger.info(f"New client connected: {websocket.remote_address}, Session: {handler.session.session_id[:8] if handler.session else 'unknown'}")
 
         try:
             async for message in websocket:
