@@ -14,7 +14,7 @@ dependencies = [
 ]
 
 [tool.pyrefly]
-search-path = [".", ".venv/Lib/site-packages/"]
+search-path = ["."]
 
 [dependency-groups]
 dev = [
