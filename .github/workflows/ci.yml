@@ -71,4 +71,4 @@ jobs:
         run: uv run ruff format --check .
 
       - name: Run Pyrefly type check
-        run: uv run pyrefly
+        run: uv run pyrefly check
