@@ -40,17 +40,3 @@ class Settings(BaseSettings):
 
 # Create settings instance
 settings = Settings()
-
-# Backwards compatibility - export commonly used settings
-SERVER_HOST = settings.server_host
-SERVER_PORT = settings.server_port
-CORS_ALLOW_ORIGINS = settings.cors_allow_origins
-NUM_CHANNELS = settings.num_channels
-SAMPLE_WIDTH = settings.sample_width
-TARGET_SAMPLE_RATE = settings.target_sample_rate
-MIN_DURATION = settings.min_duration
-BYTES_PER_SAMPLE = settings.bytes_per_sample
-VOSK_MODEL_PATH = settings.vosk_model_path
-AUDIO_RECORDINGS_DIR = settings.audio_recordings_dir
-TRANSCRIPTIONS_DIR = settings.transcriptions_dir
-MIN_BYTES = settings.min_bytes

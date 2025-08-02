@@ -14,7 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from config.settings import SERVER_HOST, SERVER_PORT, CORS_ALLOW_ORIGINS
+from config import settings
 from handlers.webrtc_handler import WebRTCServer
 
 # Configure logging
@@ -72,7 +72,7 @@ app.add_middleware(
     # pyrefly: ignore[bad-argument-type]
     # FIX ME: This is a workaround for Pyrefly not handling ParamSpec correctly
     CORSMiddleware,
-    allow_origins=CORS_ALLOW_ORIGINS,
+    allow_origins=settings.cors_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -137,7 +137,7 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     try:
-        uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT, log_level="info")
+        uvicorn.run(app, host=settings.server_host, port=settings.server_port, log_level="info")
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

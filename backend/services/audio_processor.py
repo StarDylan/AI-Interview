@@ -6,7 +6,7 @@ from pathlib import Path
 from typing import Optional
 from av.audio.frame import AudioFrame
 
-from config.settings import SAMPLE_WIDTH, TARGET_SAMPLE_RATE, AUDIO_RECORDINGS_DIR
+from config import settings
 from models.session import TranscriptionSession
 
 logger = logging.getLogger(__name__)
@@ -46,7 +46,7 @@ class SessionAudioProcessor:
         self,
         session: TranscriptionSession,
         save_audio: bool = True,
-        output_dir: str = AUDIO_RECORDINGS_DIR,
+        output_dir: str = settings.audio_recordings_dir,
     ):
         self.session = session
         self.frame_count = 0
@@ -72,9 +72,9 @@ class SessionAudioProcessor:
         audio_array = stereo_to_mono(audio_array)
 
         # Resample if necessary
-        if frame.sample_rate != TARGET_SAMPLE_RATE:
+        if frame.sample_rate != settings.target_sample_rate:
             audio_array = resample_audio(
-                audio_array, frame.sample_rate, TARGET_SAMPLE_RATE
+                audio_array, frame.sample_rate, settings.target_sample_rate
             )
 
         # Add to session buffer
@@ -87,7 +87,7 @@ class SessionAudioProcessor:
         if self.frame_count % 100 == 0:
             logger.debug(
                 f"Session {self.session.session_id[:8]}: Processed {self.frame_count} frames. "
-                f"Shape: {audio_array.shape}, Sample rate: {TARGET_SAMPLE_RATE}, Channels: {self.channels}"
+                f"Shape: {audio_array.shape}, Sample rate: {settings.target_sample_rate}, Channels: {self.channels}"
             )
 
         return audio_array
@@ -113,11 +113,11 @@ class SessionAudioProcessor:
             # Save as WAV file
             with wave.open(str(filepath), "wb") as wav_file:
                 wav_file.setnchannels(self.channels)
-                wav_file.setsampwidth(SAMPLE_WIDTH)
-                wav_file.setframerate(TARGET_SAMPLE_RATE)
+                wav_file.setsampwidth(settings.sample_width)
+                wav_file.setframerate(settings.target_sample_rate)
                 wav_file.writeframes(full_audio.tobytes())
 
-            duration = len(full_audio) / TARGET_SAMPLE_RATE
+            duration = len(full_audio) / settings.target_sample_rate
             logger.info(
                 f"Session {self.session.session_id[:8]} audio saved to: {filepath}"
             )
@@ -131,7 +131,7 @@ class SessionAudioProcessor:
                     "audio_file": str(filepath),
                     "duration_seconds": duration,
                     "total_frames": len(self.session.audio_buffer),
-                    "sample_rate": TARGET_SAMPLE_RATE,
+                    "sample_rate": settings.target_sample_rate,
                     "channels": self.channels,
                 }
             )

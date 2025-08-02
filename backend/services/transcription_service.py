@@ -5,7 +5,7 @@ from pathlib import Path
 from typing import Optional, Dict, Any
 from vosk import Model, KaldiRecognizer
 
-from config.settings import VOSK_MODEL_PATH, TARGET_SAMPLE_RATE, TRANSCRIPTIONS_DIR
+from config import settings
 from models.session import TranscriptionSession
 
 logger = logging.getLogger(__name__)
@@ -19,7 +19,7 @@ class SessionTranscriptionService:
         self.model: Optional[Any] = None
         self.recognizer: Optional[Any] = None
         self.audio_buffer = bytearray()
-        self.transcriptions_dir = Path(TRANSCRIPTIONS_DIR)
+        self.transcriptions_dir = Path(settings.transcriptions_dir)
 
         # Create transcriptions directory
         self.transcriptions_dir.mkdir(parents=True, exist_ok=True)
@@ -34,11 +34,11 @@ class SessionTranscriptionService:
     def _initialize_vosk(self):
         """Initialize Vosk model and recognizer for this session"""
         try:
-            if not os.path.exists(VOSK_MODEL_PATH):
-                raise FileNotFoundError(f"Vosk model not found at {VOSK_MODEL_PATH}")
+            if not os.path.exists(settings.vosk_model_path):
+                raise FileNotFoundError(f"Vosk model not found at {settings.vosk_model_path}")
 
-            self.model = Model(str(VOSK_MODEL_PATH))
-            self.recognizer = KaldiRecognizer(self.model, TARGET_SAMPLE_RATE)
+            self.model = Model(str(settings.vosk_model_path))
+            self.recognizer = KaldiRecognizer(self.model, settings.target_sample_rate)
             self.recognizer.SetWords(True)
             self.recognizer.SetPartialWords(True)
 
