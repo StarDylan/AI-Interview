@@ -1,15 +1,19 @@
 #!/usr/bin/env python3
 """
-WebRTC Transcription Server
+FastAPI WebRTC Transcription Server
 
-A modular WebRTC server that provides real-time audio transcription
+A FastAPI-based WebRTC server that provides real-time audio transcription
 with per-session isolation and proper resource management.
 """
 
 import asyncio
 import logging
+from contextlib import asynccontextmanager
 
-from websockets.asyncio.server import serve as websocket_serve
+from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+
 from config.settings import SERVER_HOST, SERVER_PORT
 from handlers.webrtc_handler import WebRTCServer
 
@@ -22,54 +26,118 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Global server instance
+webrtc_server = None
+cleanup_task = None
 
-async def main():
-    """Start the WebRTC transcription server"""
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """FastAPI lifespan context manager"""
+    global webrtc_server, cleanup_task
+
     logger.info("Starting WebRTC Transcription Server...")
 
+    # Initialize server
+    webrtc_server = WebRTCServer()
+
+    # Start cleanup task
+    cleanup_task = asyncio.create_task(webrtc_server.cleanup_inactive_sessions())
+
+    logger.info("Server features:")
+    logger.info("- Per-session audio transcription")
+    logger.info("- Session-isolated file storage")
+    logger.info("- Real-time WebRTC audio processing")
+    logger.info("- Automatic session cleanup")
+    logger.info("FastAPI server started successfully")
+
+    yield
+
+    # Cleanup on shutdown
+    if cleanup_task:
+        cleanup_task.cancel()
+    logger.info("Server shutdown complete")
+
+
+# Create FastAPI app
+app = FastAPI(
+    title="WebRTC Transcription Server",
+    description="A FastAPI-based WebRTC server for real-time audio transcription",
+    version="1.0.0",
+    lifespan=lifespan,
+)
+
+# Add CORS middleware
+app.add_middleware(
+    # pyrefly: ignore[bad-argument-type]
+    # FIX ME: This is a workaround for Pyrefly not handling ParamSpec correctly
+    CORSMiddleware,
+    allow_origins=["*"],  # Configure this for production
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+
+@app.get("/")
+async def root():
+    """Health check endpoint"""
+    return {"message": "WebRTC Transcription Server is running"}
+
+
+@app.get("/health")
+async def health_check():
+    """Health check endpoint"""
+    active_sessions = webrtc_server.get_active_sessions_count() if webrtc_server else 0
+    return {"status": "healthy", "active_sessions": active_sessions}
+
+
+@app.websocket("/ws")
+async def websocket_endpoint(websocket: WebSocket):
+    """WebSocket endpoint for WebRTC signaling"""
+    global webrtc_server
+
+    if not webrtc_server:
+        logger.error("WebRTC server not initialized")
+        await websocket.close(code=1011, reason="Server not ready")
+        return
+
+    await websocket.accept()
+    logger.info(f"New WebSocket connection: {websocket.client}")
+
     try:
-        # Initialize server
-        server = WebRTCServer()
+        # Create a websocket-like wrapper for compatibility
+        class WebSocketWrapper:
+            def __init__(self, websocket: WebSocket):
+                self.websocket = websocket
+                self.remote_address = websocket.client
 
-        # Start cleanup task
-        cleanup_task = asyncio.create_task(server.cleanup_inactive_sessions())
+            async def send(self, message: str):
+                await self.websocket.send_text(message)
 
-        logger.info(
-            f"Starting secure WebSocket server on wss://{SERVER_HOST}:{SERVER_PORT}"
-        )
+            def __aiter__(self):
+                return self
 
-        # Start WebSocket server
-        async with websocket_serve(
-            server.handle_client,
-            SERVER_HOST,
-            SERVER_PORT,
-        ):
-            logger.info("Server started successfully. Waiting for connections...")
+            async def __anext__(self):
+                try:
+                    message = await self.websocket.receive_text()
+                    return message
+                except WebSocketDisconnect:
+                    raise StopAsyncIteration
 
-            # Log server info
-            logger.info("Server features:")
-            logger.info("- Per-session audio transcription")
-            logger.info("- Session-isolated file storage")
-            logger.info("- Real-time WebRTC audio processing")
-            logger.info("- Automatic session cleanup")
+        # Use the existing WebRTC handler
+        wrapper = WebSocketWrapper(websocket)
+        await webrtc_server.handle_client(wrapper)
 
-            # Keep server running
-            try:
-                await asyncio.Future()  # Run forever
-            except KeyboardInterrupt:
-                logger.info("Received shutdown signal")
-            finally:
-                cleanup_task.cancel()
-                logger.info("Server shutdown complete")
-
+    except WebSocketDisconnect:
+        logger.info(f"WebSocket client disconnected: {websocket.client}")
     except Exception as e:
-        logger.error(f"Failed to start server: {e}")
-        raise
+        logger.error(f"Error handling WebSocket client: {e}")
 
 
 if __name__ == "__main__":
     try:
-        asyncio.run(main())
+        uvicorn.run(app, host=SERVER_HOST, port=SERVER_PORT, log_level="info")
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

@@ -3,7 +3,7 @@ import json
 import logging
 import asyncio
 from typing import Set, Optional
-import websockets
+from fastapi import WebSocket, WebSocketDisconnect
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
 from models.session import TranscriptionSession
@@ -294,11 +294,8 @@ class WebRTCServer:
             async for message in websocket:
                 await handler.handle_signaling_message(message)
 
-        except websockets.exceptions.ConnectionClosed:
+        except WebSocketDisconnect:
             logger.info(f"Client disconnected: {websocket.remote_address}")
-
-        except Exception as e:
-            logger.error(f"Error handling client connection: {e}")
 
         finally:
             await handler.cleanup()
