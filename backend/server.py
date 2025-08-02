@@ -137,7 +137,9 @@ async def websocket_endpoint(websocket: WebSocket):
 
 if __name__ == "__main__":
     try:
-        uvicorn.run(app, host=settings.server_host, port=settings.server_port, log_level="info")
+        uvicorn.run(
+            app, host=settings.server_host, port=settings.server_port, log_level="info"
+        )
     except KeyboardInterrupt:
         logger.info("Server stopped by user")
     except Exception as e:

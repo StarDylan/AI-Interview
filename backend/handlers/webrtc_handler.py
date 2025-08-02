@@ -3,7 +3,7 @@ import json
 import logging
 import asyncio
 from typing import Set, Optional
-from fastapi import WebSocket, WebSocketDisconnect
+from fastapi import WebSocketDisconnect
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
 from models.session import TranscriptionSession

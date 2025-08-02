@@ -69,6 +69,14 @@ pnpm install
 
 The system uses Vosk for speech recognition. Please download a model from https://alphacephei.com/vosk/models and place into `backend/vosk_models/`.
 
+### 5. Pre-Commit Hook Setup
+
+In the root of the repo run:
+
+```bash
+pre-commit install
+```
+
 ## Development
 
 ### Start Backend Server

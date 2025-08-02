@@ -35,7 +35,9 @@ class SessionTranscriptionService:
         """Initialize Vosk model and recognizer for this session"""
         try:
             if not os.path.exists(settings.vosk_model_path):
-                raise FileNotFoundError(f"Vosk model not found at {settings.vosk_model_path}")
+                raise FileNotFoundError(
+                    f"Vosk model not found at {settings.vosk_model_path}"
+                )
 
             self.model = Model(str(settings.vosk_model_path))
             self.recognizer = KaldiRecognizer(self.model, settings.target_sample_rate)
