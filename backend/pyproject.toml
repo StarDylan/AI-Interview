@@ -20,6 +20,7 @@ search-path = [".", ".venv/Lib/site-packages/"]
 
 [dependency-groups]
 dev = [
+    "pyrefly>=0.26.1",
     "ruff>=0.12.7",
 ]
 
