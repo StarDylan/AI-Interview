@@ -1,22 +1,56 @@
 from pathlib import Path
+from typing import List
+from pydantic import Field
+from pydantic_settings import BaseSettings
 
-# Audio processing settings
-NUM_CHANNELS = 1
-SAMPLE_WIDTH = 2
-TARGET_SAMPLE_RATE = 48000
-MIN_DURATION = 5
-BYTES_PER_SAMPLE = 2
 
-# Server settings
-SERVER_HOST = "0.0.0.0"
-SERVER_PORT = 3000
+class Settings(BaseSettings):
+    """Application settings with environment variable support"""
+    
+    # Server settings
+    server_host: str = Field(default="0.0.0.0", alias="SERVER_HOST")
+    server_port: int = Field(default=3000, alias="SERVER_PORT")
+    
+    # CORS settings
+    cors_allow_origins: List[str] = Field(default=[], alias="CORS_ALLOW_ORIGINS")
+    
+    # Audio processing settings (these rarely change, so keeping as constants is fine)
+    num_channels: int = 1
+    sample_width: int = 2
+    target_sample_rate: int = 48000
+    min_duration: int = 5
+    bytes_per_sample: int = 2
+    
+    # File paths
+    vosk_model_path: Path = Field(default=Path("vosk_models") / "vosk-model-small-en-us-0.15")
+    audio_recordings_dir: str = "audio_recordings"
+    transcriptions_dir: str = "transcriptions"
+    
+    @property
+    def min_bytes(self) -> int:
+        """Derived setting for minimum bytes"""
+        return int(self.target_sample_rate * self.bytes_per_sample * self.min_duration)
+    
+    class Config:
+        env_file = ".env"
+        env_file_encoding = "utf-8"
+        # Allow parsing comma-separated lists for CORS origins
+        env_list_separator = ","
 
-# File paths
-VOSK_MODEL_PATH = Path("vosk_models") / "vosk-model-small-en-us-0.15"
 
-# Output directories
-AUDIO_RECORDINGS_DIR = "audio_recordings"
-TRANSCRIPTIONS_DIR = "transcriptions"
+# Create settings instance
+settings = Settings()
 
-# Derived settings
-MIN_BYTES = int(TARGET_SAMPLE_RATE * BYTES_PER_SAMPLE * MIN_DURATION)
+# Backwards compatibility - export commonly used settings
+SERVER_HOST = settings.server_host
+SERVER_PORT = settings.server_port
+CORS_ALLOW_ORIGINS = settings.cors_allow_origins
+NUM_CHANNELS = settings.num_channels
+SAMPLE_WIDTH = settings.sample_width
+TARGET_SAMPLE_RATE = settings.target_sample_rate
+MIN_DURATION = settings.min_duration
+BYTES_PER_SAMPLE = settings.bytes_per_sample
+VOSK_MODEL_PATH = settings.vosk_model_path
+AUDIO_RECORDINGS_DIR = settings.audio_recordings_dir
+TRANSCRIPTIONS_DIR = settings.transcriptions_dir
+MIN_BYTES = settings.min_bytes

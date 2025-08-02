@@ -14,7 +14,7 @@ from fastapi import FastAPI, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from config.settings import SERVER_HOST, SERVER_PORT
+from config.settings import SERVER_HOST, SERVER_PORT, CORS_ALLOW_ORIGINS
 from handlers.webrtc_handler import WebRTCServer
 
 # Configure logging
@@ -72,7 +72,7 @@ app.add_middleware(
     # pyrefly: ignore[bad-argument-type]
     # FIX ME: This is a workaround for Pyrefly not handling ParamSpec correctly
     CORSMiddleware,
-    allow_origins=["*"],  # Configure this for production
+    allow_origins=CORS_ALLOW_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
