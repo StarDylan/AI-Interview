@@ -73,6 +73,9 @@ jobs:
       - name: Run Pyrefly type check
         run: uv run pyrefly check
 
+      - name: Run Tests
+        run: uv run pytest -v
+
   sonarqube-backend:
     name: SonarQube Backend Analysis
     runs-on: ubuntu-latest
