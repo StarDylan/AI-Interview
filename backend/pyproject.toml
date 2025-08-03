@@ -22,6 +22,7 @@ search-path = ["."]
 [dependency-groups]
 dev = [
     "pyrefly>=0.26.1",
+    "pytest>=8.4.1",
     "ruff>=0.12.7",
 ]
 
