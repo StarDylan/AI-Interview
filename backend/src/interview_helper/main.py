@@ -13,11 +13,14 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from config import settings
-from session import SessionManager
-from transcription import initialize_vosk_model
-from websocket_server import SessionManager as WebSocketSessionManager, handle_client
-from webrtc_handler import setup_webrtc_hooks
+from interview_helper.config import settings
+from interview_helper.session import SessionManager
+from interview_helper.transcription import initialize_vosk_model
+from interview_helper.websocket_server import (
+    SessionManager as WebSocketSessionManager,
+    handle_client,
+)
+from interview_helper.webrtc_handler import setup_webrtc_hooks
 
 # Configure logging
 logging.basicConfig(
@@ -124,7 +127,8 @@ app = FastAPI(
 
 # Add CORS middleware
 app.add_middleware(
-    CORSMiddleware,
+    # FIXME: This is due to Pyrefly not being able to handle ParamSpecs with `Protocol``.
+    CORSMiddleware,  # pyrefly: ignore[bad-argument-type]
     allow_origins=settings.cors_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],

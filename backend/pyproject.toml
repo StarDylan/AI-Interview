@@ -17,7 +17,7 @@ dependencies = [
 ]
 
 [tool.pyrefly]
-search-path = ["."]
+search-path = ["src/"]
 
 [dependency-groups]
 dev = [

@@ -2,24 +2,22 @@ import json
 import logging
 from typing import AsyncGenerator, Optional
 from vosk import Model, KaldiRecognizer
+from pathlib import Path
 
 logger = logging.getLogger(__name__)
 
 # Global model and recognizer instances (loaded via FastAPI lifespan)
 _model: Optional[Model] = None
-_recognizer_template: Optional[KaldiRecognizer] = None
+_sample_rate: int = 16000
 
 
-def initialize_vosk_model(model_path: str, sample_rate: int):
+def initialize_vosk_model(model_path: Path, sample_rate: int):
     """Initialize Vosk model (called from FastAPI lifespan)"""
-    global _model, _recognizer_template
+    global _model, _sample_rate
 
     try:
         _model = Model(str(model_path))
-        _recognizer_template = KaldiRecognizer(_model, sample_rate)
-        _recognizer_template.SetWords(True)
-        _recognizer_template.SetPartialWords(True)
-
+        _sample_rate = sample_rate
         logger.info(f"Vosk model loaded from {model_path}")
 
     except Exception as e:
@@ -34,7 +32,7 @@ def create_recognizer() -> Optional[KaldiRecognizer]:
         return None
 
     try:
-        recognizer = KaldiRecognizer(_model, _recognizer_template.sample_rate)
+        recognizer = KaldiRecognizer(_model, _sample_rate)
         recognizer.SetWords(True)
         recognizer.SetPartialWords(True)
         return recognizer
@@ -80,7 +78,7 @@ def finalize_transcription(recognizer: KaldiRecognizer) -> Optional[str]:
 
 # Mock functions for testing
 async def mock_transcribe_stream(
-    chunk: bytes, responses: list[str] = None
+    chunk: bytes, responses: Optional[list[str]] = None
 ) -> AsyncGenerator[str, None]:
     """Mock transcription function for testing"""
     responses = responses or ["Hello", "world", "this is a test"]

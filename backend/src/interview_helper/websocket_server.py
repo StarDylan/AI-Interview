@@ -3,14 +3,12 @@ import logging
 from typing import Dict, Callable, Awaitable, Optional
 from fastapi import WebSocket, WebSocketDisconnect
 
-from messages import BaseMessage
+from interview_helper.messages import Message
 
 logger = logging.getLogger(__name__)
 
 # Hook type definitions
-OnConnectHook = Callable[
-    [str, Callable[[BaseMessage], Awaitable[None]]], Awaitable[None]
-]
+OnConnectHook = Callable[[str, Callable[[Message], Awaitable[None]]], Awaitable[None]]
 OnMessageHook = Callable[[str, str], Awaitable[None]]
 OnDisconnectHook = Callable[[str], Awaitable[None]]
 
@@ -46,26 +44,6 @@ class SessionManager:
         async with self._lock:
             self._connections.pop(user_id, None)
 
-    async def broadcast(self, message: BaseMessage):
-        """Broadcast message to all connected clients"""
-        async with self._lock:
-            if not self._connections:
-                return
-
-            message_json = message.model_dump_json()
-            disconnected_users = []
-
-            for user_id, websocket in self._connections.items():
-                try:
-                    await websocket.send_text(message_json)
-                except Exception as e:
-                    logger.error(f"Error broadcasting to {user_id}: {e}")
-                    disconnected_users.append(user_id)
-
-            # Clean up disconnected clients
-            for user_id in disconnected_users:
-                self._connections.pop(user_id, None)
-
     def get_connection_count(self) -> int:
         """Get number of active connections"""
         return len(self._connections)
@@ -97,7 +75,7 @@ async def handle_client(websocket: WebSocket, session_manager: SessionManager):
     logger.info(f"WebSocket client connected: {user_id}")
 
     # Create send callback for this connection
-    async def send_func(message: BaseMessage):
+    async def send_func(message: Message):
         try:
             await websocket.send_text(message.model_dump_json())
         except Exception as e:

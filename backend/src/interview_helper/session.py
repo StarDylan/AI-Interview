@@ -6,11 +6,11 @@ import json
 import logging
 import asyncio
 
-from messages import BaseMessage, TranscriptionMessage, ErrorMessage
+from interview_helper.messages import Message, TranscriptionMessage, ErrorMessage
 
 logger = logging.getLogger(__name__)
 
-SendCallback = Callable[[BaseMessage], Awaitable[None]]
+SendCallback = Callable[[Message], Awaitable[None]]
 
 
 @dataclass
@@ -81,7 +81,7 @@ class Session:
         )
         await self.send(message)
 
-    async def send(self, message: BaseMessage):
+    async def send(self, message: Message):
         """Send message via callback if available"""
         if self.send_callback:
             await self.send_callback(message)

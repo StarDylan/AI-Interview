@@ -3,10 +3,14 @@ import logging
 from typing import Optional, Callable, Awaitable
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
-from session import Session, SessionManager
-from transcription import transcribe_stream, create_recognizer, finalize_transcription
-from processing import process_text
-from messages import BaseMessage
+from interview_helper.session import Session, SessionManager
+from interview_helper.transcription import (
+    transcribe_stream,
+    create_recognizer,
+    finalize_transcription,
+)
+from interview_helper.processing import process_text
+from interview_helper.messages import WebRTCMessage
 
 logger = logging.getLogger(__name__)
 
@@ -186,7 +190,7 @@ async def on_offer(user_id: str, offer_data: dict, session_manager: SessionManag
 
     answer_data = await handle_offer(user_id, offer_data, session)
     if answer_data:
-        await session.send(BaseMessage(type="webrtc", data=answer_data))
+        await session.send(WebRTCMessage(type="answer", data=answer_data))
 
 
 async def on_audio_chunk(user_id: str, chunk: bytes, session_manager: SessionManager):
