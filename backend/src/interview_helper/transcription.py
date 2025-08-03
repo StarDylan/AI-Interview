@@ -74,18 +74,3 @@ def finalize_transcription(recognizer: KaldiRecognizer) -> Optional[str]:
     except Exception as e:
         logger.error(f"Error getting final result: {e}")
         return None
-
-
-# Mock functions for testing
-async def mock_transcribe_stream(
-    chunk: bytes, responses: Optional[list[str]] = None
-) -> AsyncGenerator[str, None]:
-    """Mock transcription function for testing"""
-    responses = responses or ["Hello", "world", "this is a test"]
-
-    # Simple mock - just yield responses based on chunk count
-    import hashlib
-
-    chunk_hash = hashlib.md5(chunk).hexdigest()
-    index = int(chunk_hash, 16) % len(responses)
-    yield responses[index]
