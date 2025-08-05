@@ -20,10 +20,13 @@ repos:
       - id: ruff-check
         types: [python]
         files: ^backend/
+        stages: [pre-commit]
+
       # Run the formatter.
       - id: ruff-format
         types: [python]
         files: ^backend/
+        stages: [pre-commit]
 
   - repo: local
     hooks:
@@ -33,6 +36,7 @@ repos:
         args: ["--directory=backend", "run", "pytest"]
         language: node
         pass_filenames: false
+        stages: [pre-commit]
 
       # --- Frontend (TypeScript) ---
       - id: prettier
@@ -41,8 +45,11 @@ repos:
         args: ["--dir=frontend/", "run", "pretty-hook"]
         language: node
         pass_filenames: false
+        stages: [pre-commit]
+
   - repo: https://github.com/pre-commit/mirrors-eslint
     rev: "v9.30.1"
     hooks:
       - id: eslint
         files: ^frontend/
+        stages: [pre-commit]
