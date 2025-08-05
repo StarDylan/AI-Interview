@@ -25,9 +25,16 @@ repos:
         types: [python]
         files: ^backend/
 
-  # --- Frontend (TypeScript) ---
   - repo: local
     hooks:
+      - id: pytest
+        name: Run pytest via uv
+        entry: uv
+        args: ["--directory=backend", "run", "pytest"]
+        language: node
+        pass_filenames: false
+
+      # --- Frontend (TypeScript) ---
       - id: prettier
         name: Run Prettier via pnpm
         entry: pnpm

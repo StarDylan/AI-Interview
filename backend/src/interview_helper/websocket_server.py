@@ -1,8 +1,8 @@
 import asyncio
 import logging
 from typing import Dict, Callable, Awaitable, Optional
-from fastapi import WebSocket, WebSocketDisconnect
-
+from fastapi import WebSocketDisconnect
+from typing import Protocol, runtime_checkable
 from interview_helper.messages import Message
 
 logger = logging.getLogger(__name__)
@@ -13,11 +13,20 @@ OnMessageHook = Callable[[str, str], Awaitable[None]]
 OnDisconnectHook = Callable[[str], Awaitable[None]]
 
 
+@runtime_checkable
+class WebSocketProtocol(Protocol):
+    """The async WebSocket interface your SessionManager/handle_client actually uses."""
+
+    async def accept(self) -> None: ...
+    async def send_text(self, text: str) -> None: ...
+    async def receive_text(self) -> str: ...
+
+
 class SessionManager:
     """Encapsulates WebSocket session state and hooks"""
 
     def __init__(self):
-        self._connections: Dict[str, WebSocket] = {}
+        self._connections: Dict[str, WebSocketProtocol] = {}
         self._lock = asyncio.Lock()
         self._on_connect: Optional[OnConnectHook] = None
         self._on_message: Optional[OnMessageHook] = None
@@ -34,7 +43,7 @@ class SessionManager:
         self._on_message = on_message
         self._on_disconnect = on_disconnect
 
-    async def add_connection(self, user_id: str, websocket: WebSocket):
+    async def add_connection(self, user_id: str, websocket: WebSocketProtocol):
         """Add connection to manager"""
         async with self._lock:
             self._connections[user_id] = websocket
@@ -42,7 +51,7 @@ class SessionManager:
     async def remove_connection(self, user_id: str):
         """Remove connection from manager"""
         async with self._lock:
-            self._connections.pop(user_id, None)
+            self._connections.pop(user_id)
 
     def get_connection_count(self) -> int:
         """Get number of active connections"""
@@ -62,24 +71,21 @@ class SessionManager:
         return self._on_disconnect
 
 
-async def handle_client(websocket: WebSocket, session_manager: SessionManager):
+async def handle_client(websocket: WebSocketProtocol, session_manager: SessionManager):
     """
     Handle WebSocket client connection - pure function driven by dependency injection
     """
     await websocket.accept()
 
     # Generate user ID (in real app, this might come from auth)
-    user_id = f"user_{id(websocket)}"
+    user_id: str = f"user_{id(websocket)}"
     await session_manager.add_connection(user_id, websocket)
 
     logger.info(f"WebSocket client connected: {user_id}")
 
     # Create send callback for this connection
     async def send_func(message: Message):
-        try:
-            await websocket.send_text(message.model_dump_json())
-        except Exception as e:
-            logger.error(f"Error sending message to {user_id}: {e}")
+        await websocket.send_text(message.model_dump_json())
 
     try:
         # Call on_connect hook
@@ -96,9 +102,6 @@ async def handle_client(websocket: WebSocket, session_manager: SessionManager):
                     await session_manager.on_message(user_id, message)
 
             except WebSocketDisconnect:
-                break
-            except Exception as e:
-                logger.error(f"Error handling message from {user_id}: {e}")
                 break
 
     finally:
