@@ -1,7 +1,7 @@
+from typing import Annotated
 from pathlib import Path
-from typing import List
-from pydantic import Field
-from pydantic_settings import BaseSettings
+from pydantic import Field, field_validator
+from pydantic_settings import BaseSettings, NoDecode
 
 
 class Settings(BaseSettings):
@@ -12,7 +12,22 @@ class Settings(BaseSettings):
     server_port: int = Field(default=3000, alias="SERVER_PORT")
 
     # CORS settings
-    cors_allow_origins: List[str] = Field(default=[], alias="CORS_ALLOW_ORIGINS")
+    cors_allow_origins: Annotated[list[str], NoDecode] = Field(
+        default=[], alias="CORS_ALLOW_ORIGINS"
+    )
+
+    @field_validator("cors_allow_origins", mode="before")
+    @classmethod
+    def split_origins(cls, v):
+        if isinstance(v, str):
+            return [origin.strip() for origin in v.strip("[]").split(",")]
+        return v
+
+    def model_post_init(self, __context):
+        if not self.cors_allow_origins:
+            raise ValueError(
+                "Missing required environment variable: CORS_ALLOW_ORIGINS"
+            )
 
     # Audio processing settings (these rarely change, so keeping as constants is fine)
     num_channels: int = 1

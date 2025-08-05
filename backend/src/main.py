@@ -1,10 +1,4 @@
 #!/usr/bin/env python3
-"""
-Modular FastAPI WebRTC Transcription Server
-
-A refactored FastAPI-based WebRTC server with functional, modular architecture.
-"""
-
 import asyncio
 import logging
 from contextlib import asynccontextmanager

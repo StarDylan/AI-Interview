@@ -35,7 +35,16 @@ repos:
         entry: uv
         args: ["--directory=backend", "run", "pytest"]
         language: node
+        files: python
         pass_filenames: false
+        stages: [pre-commit]
+
+      - id: pytest
+        name: Run pyrefly via uv
+        entry: uv
+        args: ["--directory=backend", "run", "pyrefly"]
+        language: node
+        files: python
         stages: [pre-commit]
 
       # --- Frontend (TypeScript) ---
