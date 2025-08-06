@@ -119,10 +119,11 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-# Add CORS middleware
 app.add_middleware(
-    # FIXME: This is due to Pyrefly not being able to handle ParamSpecs with `Protocol``.
-    CORSMiddleware,  # pyrefly: ignore[bad-argument-type]
+    # FIXME: This is due to Pyrefly not being able to handle Generic ParamSpec and Protocol.
+    # See https://github.com/facebook/pyrefly/issues/43
+    # pyrefly: ignore[bad-argument-type]
+    CORSMiddleware,
     allow_origins=settings.cors_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
