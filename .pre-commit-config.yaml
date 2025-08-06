@@ -9,7 +9,12 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
-        args: []
+        args:
+          [
+            "--verbose",
+            "--force-scope",
+            "--scopes=backend,frontend,ci,tooling,project",
+          ]
 
   # --- Backend (Python) ---
   - repo: https://github.com/astral-sh/ruff-pre-commit
