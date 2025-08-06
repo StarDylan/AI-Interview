@@ -15,9 +15,9 @@ class FakeWebSocket:
     async def accept(self):
         self.accepted = True
 
-    async def send_text(self, text: str):
+    async def send_text(self, data: str):
         assert self.accepted, "Must accept before sending"
-        self.sent_messages.append(text)
+        self.sent_messages.append(data)
 
     async def receive_text(self):
         result = await self._incoming.get()
