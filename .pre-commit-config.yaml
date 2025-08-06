@@ -45,6 +45,7 @@ repos:
         args: ["--directory=backend", "run", "pyrefly"]
         language: node
         files: python
+        pass_filenames: false
         stages: [pre-commit]
 
       # --- Frontend (TypeScript) ---
