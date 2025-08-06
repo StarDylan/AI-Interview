@@ -1,3 +1,4 @@
+from pydantic_settings.main import SettingsConfigDict
 from typing import Annotated
 from pathlib import Path
 from pydantic import Field, field_validator
@@ -20,7 +21,10 @@ class Settings(BaseSettings):
     @classmethod
     def split_origins(cls, v):
         if isinstance(v, str):
-            return [origin.strip() for origin in v.strip("[]").split(",")]
+            origins = [origin.strip() for origin in v.strip("[]").split(",")]
+            # Remove empty strings
+            origins = [origin for origin in origins if origin]
+            return origins
         return v
 
     def model_post_init(self, __context):
@@ -48,12 +52,17 @@ class Settings(BaseSettings):
         """Derived setting for minimum bytes"""
         return int(self.target_sample_rate * self.bytes_per_sample * self.min_duration)
 
-    class Config:
-        env_file = ".env"
-        env_file_encoding = "utf-8"
-        # Allow parsing comma-separated lists for CORS origins
-        env_list_separator = ","
+    model_config = SettingsConfigDict(
+        env_file=".env", env_file_encoding="utf-8", frozen=True
+    )
 
 
-# Create settings instance
-settings = Settings()
+settings = None
+
+
+def get_settings():
+    global settings
+    # Create settings instance
+    if settings is None:
+        settings = Settings()
+    return settings

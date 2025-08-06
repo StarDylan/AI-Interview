@@ -122,3 +122,17 @@ async def test_multiple_connections(session_manager: SessionManager):
 
     await session_manager.remove_connection("user2")
     assert session_manager.get_connection_count() == 0
+
+
+@pytest.mark.asyncio
+async def test_with_no_hooks(
+    session_manager: SessionManager, fake_websocket: FakeWebSocket
+):
+    # Enqueue one user message then trigger disconnect
+    fake_websocket.enqueue("test message")
+    fake_websocket.enqueue(WebSocketDisconnect())
+
+    await handle_client(fake_websocket, session_manager)
+
+    # verify accept was called and nothing blew up
+    assert fake_websocket.accepted

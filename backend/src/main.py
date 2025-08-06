@@ -7,7 +7,7 @@ from fastapi import FastAPI, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from interview_helper.config import settings
+from interview_helper.config import get_settings
 from interview_helper.session import SessionManager
 from interview_helper.transcription import initialize_vosk_model
 from interview_helper.websocket_server import (
@@ -40,7 +40,9 @@ async def lifespan(app: FastAPI):
 
     # Initialize Vosk model
     try:
-        initialize_vosk_model(settings.vosk_model_path, settings.target_sample_rate)
+        initialize_vosk_model(
+            get_settings().vosk_model_path, get_settings().target_sample_rate
+        )
         logger.info("✅ Vosk model initialized")
     except Exception as e:
         logger.error(f"❌ Failed to initialize Vosk model: {e}")
@@ -124,7 +126,7 @@ app.add_middleware(
     # See https://github.com/facebook/pyrefly/issues/43
     # pyrefly: ignore[bad-argument-type]
     CORSMiddleware,
-    allow_origins=settings.cors_allow_origins,
+    allow_origins=get_settings().cors_allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
@@ -198,7 +200,10 @@ async def websocket_endpoint(websocket: WebSocket):
 if __name__ == "__main__":
     try:
         uvicorn.run(
-            app, host=settings.server_host, port=settings.server_port, log_level="info"
+            app,
+            host=get_settings().server_host,
+            port=get_settings().server_port,
+            log_level="info",
         )
     except KeyboardInterrupt:
         logger.info("🛑 Server stopped by user")
