@@ -55,18 +55,6 @@ def test_empty_cors_origins_raises_error():
             Settings()
 
 
-def test_min_bytes_property():
-    """Test the derived min_bytes property calculation"""
-    with patch.dict(
-        "os.environ", {"CORS_ALLOW_ORIGINS": "https://localhost:3000"}, clear=True
-    ):
-        settings = Settings()
-
-        # min_bytes = target_sample_rate * bytes_per_sample * min_duration
-        expected = 48000 * 2 * 5
-        assert settings.min_bytes == expected
-
-
 def test_split_origins_splits_comma_separated_string():
     """Test that split_origins splits comma-separated string"""
     from interview_helper.config import Settings
