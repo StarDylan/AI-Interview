@@ -3,7 +3,7 @@ import logging
 from typing import Optional, Callable, Awaitable
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
 
-from interview_helper.session import Session, SessionManager
+from interview_helper.session import Project, SessionManager
 from interview_helper.transcription import (
     transcribe_stream,
     create_recognizer,
@@ -38,7 +38,7 @@ def parse_candidate(candidate_str: str) -> Optional[dict]:
 
 
 async def handle_offer(
-    user_id: str, offer_data: dict, session: Session
+    user_id: str, offer_data: dict, session: Project
 ) -> Optional[dict]:
     """Handle WebRTC offer - returns answer data"""
     try:
@@ -84,7 +84,7 @@ async def handle_offer(
         return None
 
 
-async def handle_ice_candidate(user_id: str, candidate_data: dict, session: Session):
+async def handle_ice_candidate(user_id: str, candidate_data: dict, session: Project):
     """Handle ICE candidate"""
     peer_connection = session.metadata.get("peer_connection")
     if not peer_connection:
@@ -119,7 +119,7 @@ async def handle_ice_candidate(user_id: str, candidate_data: dict, session: Sess
         await session.send_error("ice_candidate_error", str(e))
 
 
-async def process_audio_track(user_id: str, track, session: Session):
+async def process_audio_track(user_id: str, track, session: Project):
     """Process incoming audio frames from WebRTC track"""
     recognizer = session.metadata.get("recognizer")
     if not recognizer:
@@ -157,27 +157,44 @@ async def process_audio_track(user_id: str, track, session: Session):
         await finalize_session(user_id, session)
 
 
-async def finalize_session(user_id: str, session: Session):
+async def finalize_session(user_id: str, session: Project):
     """Finalize the session"""
     if not session.is_active:
         return
 
     logger.info(f"Finalizing session for user {user_id}")
 
-    # Get final transcription
-    recognizer = session.metadata.get("recognizer")
-    if recognizer:
-        final_text = finalize_transcription(recognizer)
-        if final_text:
-            session.add_transcription(final_text, is_partial=False)
-            await session.send_transcription(final_text, is_partial=False)
+    try:
+        # Get final transcription
+        recognizer = session.metadata.get("recognizer")
+        if recognizer:
+            try:
+                final_text = finalize_transcription(recognizer)
+                if final_text:
+                    session.add_transcription(final_text, is_partial=False)
+                    await session.send_transcription(final_text, is_partial=False)
+            except Exception as e:
+                logger.error(f"Error finalizing transcription for user {user_id}: {e}")
+                await session.send_error(
+                    "finalization_error", f"Failed to finalize transcription: {e}"
+                )
 
-    # Close peer connection
-    peer_connection = session.metadata.get("peer_connection")
-    if peer_connection:
-        await peer_connection.close()
+        # Close peer connection with proper error handling
+        peer_connection = session.metadata.get("peer_connection")
+        if peer_connection:
+            try:
+                await peer_connection.close()
+                logger.debug(f"Closed peer connection for user {user_id}")
+            except Exception as e:
+                logger.error(f"Error closing peer connection for user {user_id}: {e}")
 
-    session.deactivate()
+    except Exception as e:
+        logger.error(
+            f"Unexpected error during session finalization for user {user_id}: {e}"
+        )
+    finally:
+        # Always deactivate session, even if cleanup fails
+        session.deactivate()
 
 
 # Hook implementations
@@ -219,7 +236,9 @@ def setup_webrtc_hooks(session_manager: SessionManager):
             message_type = data.get("type")
 
             if message_type == "offer":
-                await handle_offer(user_id, data, session)
+                answer_data = await handle_offer(user_id, data, session)
+                if answer_data:
+                    await session.send(WebRTCMessage(type="answer", data=answer_data))
             elif message_type == "ice_candidate":
                 await handle_ice_candidate(user_id, data, session)
             else:
@@ -234,7 +253,13 @@ def setup_webrtc_hooks(session_manager: SessionManager):
         session = session_manager.get_session_by_user(user_id)
         if session:
             await finalize_session(user_id, session)
-        session_manager.remove_session(session.session_id if session else "")
-        logger.info(f"Cleaned up WebRTC session for user {user_id}")
+            # Remove session using the session_id
+            removed = session_manager.remove_session(session.project_id)
+            if removed:
+                logger.info(f"Cleaned up WebRTC session for user {user_id}")
+            else:
+                logger.warning(f"Failed to remove session for user {user_id}")
+        else:
+            logger.warning(f"No session found to clean up for user {user_id}")
 
     return webrtc_on_connect, webrtc_on_message, webrtc_on_disconnect

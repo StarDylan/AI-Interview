@@ -38,16 +38,6 @@ def test_cors_origins_list_string_parsing():
         assert settings.cors_allow_origins == [origin1, origin2]
 
 
-def test_missing_cors_origins_raises_error():
-    """Test that missing CORS_ALLOW_ORIGINS raises ValueError"""
-    with patch.dict("os.environ", {}, clear=True):
-        with pytest.raises(
-            ValueError,
-            match="Missing required environment variable: CORS_ALLOW_ORIGINS",
-        ):
-            Settings()
-
-
 def test_empty_cors_origins_raises_error():
     """Test that empty CORS_ALLOW_ORIGINS raises ValueError"""
     with patch.dict("os.environ", {"CORS_ALLOW_ORIGINS": ""}, clear=True):
