@@ -40,11 +40,9 @@ export function createWebRTCClient({
 
   async function handleWebsocketSignaling(msg: SignalingMessage) {
     if (msg.type === "answer") {
-      console.log("Received answer:", msg.sdp);
-      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
     } else if (msg.type === "ice_candidate") {
-      console.log("Received ICE candidate:", msg.candidate);
-      await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
     }
   }
 
@@ -88,7 +86,9 @@ export function createWebRTCClient({
         sendMessage(
           {
             type: "ice_candidate",
-            candidate: event.candidate,
+            data: {
+              candidate: event.candidate,
+            },
           },
           ws,
         );
@@ -195,7 +195,9 @@ export async function createAndSendOffer(pc: RTCPeerConnection, ws: WebSocket) {
   sendMessage(
     {
       type: "offer",
-      sdp: pc.localDescription as RTCSessionDescriptionInit,
+      data: {
+        sdp: pc.localDescription as RTCSessionDescriptionInit,
+      },
     },
     ws,
   );

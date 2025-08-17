@@ -55,14 +55,3 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(
         env_file=".env", env_file_encoding="utf-8", frozen=True
     )
-
-
-settings = None
-
-
-def get_settings():
-    global settings
-    # Create settings instance
-    if settings is None:
-        settings = Settings()
-    return settings

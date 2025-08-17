@@ -5,10 +5,12 @@ description = "Add your description here"
 requires-python = ">=3.13"
 dependencies = [
     "aiortc>=1.13.0",
+    "anyio>=4.9.0",
     "fastapi[standard]>=0.116.1",
     "numpy>=2.3.1",
     "pydantic>=2.11.7",
     "pydantic-settings>=2.10.1",
+    "python-ulid>=3.0.0",
     "scipy>=1.16.0",
     "scipy-stubs>=1.16.1.0",
     "streamz>=0.6.4",

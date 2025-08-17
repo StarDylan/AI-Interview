@@ -20,7 +20,6 @@ backend = container "Backend" "Provides Interview Helper functionality." "Python
     }
     
     audio_stream -> session_context "Sends audio data to"
-    audio_stream -> audio_processor "Sends audio data to"
     audio_processor -> session_context "Sends extracted audio data (e.g., transcript) to "
     analyzer -> session_context "Fetches session context during analysis from"
     analyzer -> websocket_controller "Provides feedback for users to"

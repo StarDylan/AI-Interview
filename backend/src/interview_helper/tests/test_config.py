@@ -1,8 +1,9 @@
 import pytest
 from unittest.mock import patch
 from typing import cast
-from interview_helper.config import Settings
 from pydantic import ValidationError
+
+from interview_helper.config import Settings
 
 
 def test_settings_from_environment():
@@ -47,7 +48,6 @@ def test_empty_cors_origins_raises_error():
 
 def test_split_origins_splits_comma_separated_string():
     """Test that split_origins splits comma-separated string"""
-    from interview_helper.config import Settings
 
     result = Settings.split_origins("https://localhost:3000,https://example.com")
     assert result == ["https://localhost:3000", "https://example.com"]
@@ -55,7 +55,6 @@ def test_split_origins_splits_comma_separated_string():
 
 def test_split_origins_accepts_list():
     """Test that split_origins passes through list input"""
-    from interview_helper.config import Settings
 
     origins_list = ["https://localhost:3000", "https://example.com"]
     result = Settings.split_origins(origins_list)
@@ -64,7 +63,6 @@ def test_split_origins_accepts_list():
 
 def test_split_origins_cleans_bracketed_string():
     """Test that split_origins cleans bracketed string"""
-    from interview_helper.config import Settings
 
     result = Settings.split_origins("[https://localhost:3000,https://example.com]")
     assert result == ["https://localhost:3000", "https://example.com"]
@@ -72,7 +70,6 @@ def test_split_origins_cleans_bracketed_string():
 
 def test_split_origins_removes_empty_strings():
     """Test that split_origins does not include empty strings"""
-    from interview_helper.config import Settings
 
     result = Settings.split_origins("[https://localhost:3000,https://example.com,]")
     assert result == ["https://localhost:3000", "https://example.com"]
@@ -80,7 +77,6 @@ def test_split_origins_removes_empty_strings():
 
 def test_split_origins_empty_string_results_in_empty_list():
     """Test that split_origins returns empty list for empty string"""
-    from interview_helper.config import Settings
 
     result = Settings.split_origins("")
     assert result == []

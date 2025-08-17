@@ -1,11 +1,10 @@
 from datetime import datetime
-from typing import Optional, Dict, Any, Literal, Union
+from typing import Optional, Dict, Any, Literal, Annotated
+
 from pydantic import BaseModel, Field
 
 
 class TranscriptionMessage(BaseModel):
-    """Real-time transcription update message"""
-
     type: Literal["transcription"] = "transcription"
     timestamp: datetime = Field(default_factory=datetime.now)
     session_id: str
@@ -14,8 +13,6 @@ class TranscriptionMessage(BaseModel):
 
 
 class ErrorMessage(BaseModel):
-    """Error message"""
-
     type: Literal["error"] = "error"
     timestamp: datetime = Field(default_factory=datetime.now)
     error_code: str
@@ -24,12 +21,22 @@ class ErrorMessage(BaseModel):
 
 
 class WebRTCMessage(BaseModel):
-    """WebRTC signaling messages"""
+    """
+    WebRTC signaling messages. Kept loose because lower layers handle details.
+    """
 
     type: Literal["offer", "answer", "ice_candidate"]
     timestamp: datetime = Field(default_factory=datetime.now)
-    session_id: Optional[str] = None
     data: Dict[str, Any]
 
 
-Message = Union[TranscriptionMessage, ErrorMessage, WebRTCMessage]
+WebSocketMessage: type[ErrorMessage | TranscriptionMessage | WebRTCMessage] = (
+    TranscriptionMessage | ErrorMessage | WebRTCMessage
+)
+
+
+class Envelope(BaseModel):
+    message: Annotated[
+        WebSocketMessage,
+        Field(discriminator="type"),
+    ]
