@@ -1,11 +1,17 @@
 #!/usr/bin/env python3
+from interview_helper.audio_stream_handler.audio_utils import (
+    async_audio_write_to_disk_consumer_pair,
+)
 import logging
+import asyncio.exceptions
 
+from interview_helper.config import Settings
+from interview_helper.context_manager.messages import WebRTCMessage
 from interview_helper.context_manager.session_context_manager import AppContextManager
 from interview_helper.context_manager.concurrent_websocket import ConcurrentWebSocket
 from interview_helper.context_manager.resource_keys import WEBSOCKET
-from interview_helper.audio_stream_handler.audio_utils import (
-    write_to_disk_audio_consumer,
+from interview_helper.audio_stream_handler.audio_stream_handler import (
+    handle_webrtc_message,
 )
 
 from fastapi import FastAPI, WebSocket
@@ -14,14 +20,16 @@ import uvicorn
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
+    level=logging.WARNING,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(), logging.FileHandler("transcription_server.log")],
 )
 
 logger = logging.getLogger(__name__)
 
-session_manager = AppContextManager((write_to_disk_audio_consumer,))
+session_manager = AppContextManager(
+    (async_audio_write_to_disk_consumer_pair,), settings=Settings()
+)
 
 # Create FastAPI app
 app = FastAPI(
@@ -53,9 +61,23 @@ async def websocket_endpoint(websocket: WebSocket):
     await websocket.accept()
     context = await session_manager.new_session()
 
-    await context.register(
-        WEBSOCKET, ConcurrentWebSocket(already_accepted_ws=websocket)
-    )
+    cws = ConcurrentWebSocket(already_accepted_ws=websocket)
+
+    async with cws:  # instead of calling __aenter__ manually
+        try:
+            await context.register(WEBSOCKET, cws)
+
+            while True:
+                message = await cws.receive_message()
+
+                if isinstance(message, WebRTCMessage):
+                    await handle_webrtc_message(context, message)
+                # handle other message types...
+        except asyncio.CancelledError as e:
+            # client disconnected
+            # cleanup here if needed, then suppress the exception
+            # (or re-raise if you want uvicorn/starlette to see it)
+            print("Cancelled", e)
 
 
 if __name__ == "__main__":

@@ -1,4 +1,5 @@
 import pytest
+import anyio
 
 from interview_helper.context_manager.types import ResourceKey
 from interview_helper.context_manager.session_context_manager import AppContextManager
@@ -20,3 +21,37 @@ async def test_context_manager_maintains_individual_state():
     await ctx.register(test_resource_key, "hello")
 
     assert await ctx.get(test_resource_key) == "hello"
+
+
+async def test_content_manager_can_wait():
+    test_resource_key1 = ResourceKey[str]("string")
+    test_resource_key2 = ResourceKey[str]("string2")
+    context_manager = AppContextManager(())
+    ctx = await context_manager.new_session()
+
+    got = {}
+
+    event = anyio.Event()
+
+    with anyio.move_on_after(1):
+        async with anyio.create_task_group() as tg:
+
+            async def waiter(got: dict[str, str]):
+                event.set()
+                got["val"] = await ctx.get_or_wait(test_resource_key2)
+
+            tg.start_soon(waiter, got)
+
+            # Wait for function
+            await event.wait()
+
+            # Ensure that Context Manager still functions normally
+            str1 = "hello1"
+            await ctx.register(test_resource_key1, str1)
+            assert await ctx.get(test_resource_key1) == str1
+
+            str2 = "hello2"
+            await ctx.register(test_resource_key2, str2)
+
+            # Exiting the TaskGroup waits for waiter to finish.
+    assert got["val"] == "hello2"

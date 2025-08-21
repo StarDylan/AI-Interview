@@ -1,6 +1,6 @@
 // Configuration
 
-import type { Message, SignalingMessage } from "./message";
+import type { Envelope, Message, SignalingMessage } from "./message";
 import { toWebSocketUrl } from "./url-utils";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL;
@@ -60,7 +60,8 @@ export function createWebRTCClient({
       ws = null;
     } else {
       ws = null;
-      console.log("ws connection error");
+      console.warn("ws connection error");
+      console.warn(evt);
     }
     console.log("WebSocket connection closed");
     onConnectionChange("disconnected");
@@ -145,8 +146,8 @@ export function createWebRTCClient({
 export function initWebSocket(onSignal: (msg: Message) => void) {
   const ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onmessage = ({ data }) => {
-    const msg = JSON.parse(data);
-    onSignal(msg);
+    const msg = JSON.parse(data) as Envelope;
+    onSignal(msg.message);
   };
 
   return ws;
@@ -181,8 +182,9 @@ async function setupLocalStream() {
  * @param {Object} message - { sdp } or { candidate }
  */
 export function sendMessage(message: Message, ws: WebSocket) {
+  const envelope: Envelope = { message };
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+    ws.send(JSON.stringify(envelope));
   }
 }
 /**

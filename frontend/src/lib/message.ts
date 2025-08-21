@@ -31,3 +31,7 @@ export type SignalingMessage =
   | IceCandidateMessage;
 
 export type Message = SignalingMessage;
+
+export interface Envelope {
+  message: Message;
+}

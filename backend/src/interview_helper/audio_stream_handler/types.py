@@ -1,13 +1,13 @@
 import numpy as np
-from typing import Any
+import numpy.typing as nptype
 from dataclasses import dataclass
 
-type PCMAudioArray = np.ndarray[tuple[Any], np.dtype[np.float32]]
+type PCMAudioArray = nptype.NDArray[np.int16]
 
 
 @dataclass
 class AudioChunk:
-    data: PCMAudioArray
+    data: list[PCMAudioArray]
     framerate: int
     number_of_channels: int
 

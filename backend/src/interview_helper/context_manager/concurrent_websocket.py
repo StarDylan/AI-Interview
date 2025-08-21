@@ -1,5 +1,5 @@
 import anyio.abc
-from anyio import create_memory_object_stream
+import anyio
 from anyio.streams.memory import MemoryObjectReceiveStream
 from typing import Optional
 
@@ -31,7 +31,7 @@ class ConcurrentWebSocket:
         message_buffer_size: int = 256,
     ):
         self._ws = already_accepted_ws
-        self._send_to_client, self._recv_to_client = create_memory_object_stream[
+        self._send_to_client, self._recv_to_client = anyio.create_memory_object_stream[
             WebSocketMessage
         ](message_buffer_size)
         self._task_group: Optional[anyio.abc.TaskGroup] = None
@@ -76,8 +76,6 @@ class ConcurrentWebSocket:
             async for msg in recieve_stream_to_client:
                 msg_to_send = Envelope(message=msg)
                 await websocket.send_text(msg_to_send.model_dump_json())
-
-        await websocket.close()
 
     async def send_message(self, message: WebSocketMessage) -> None:
         await self._send_to_client.send(message)

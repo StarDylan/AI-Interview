@@ -1,3 +1,9 @@
+from interview_helper.audio_stream_handler.audio_utils import (
+    close_write_to_disk_audio_consumer,
+)
+from aiortc.mediastreams import MediaStreamError
+from interview_helper.audio_stream_handler.types import AudioChunk
+from interview_helper.audio_stream_handler.types import PCMAudioArray
 import logging
 from typing import Optional
 from aiortc import RTCPeerConnection, RTCSessionDescription, RTCIceCandidate
@@ -17,8 +23,10 @@ from interview_helper.audio_stream_handler.audio_utils import to_pcm
 logger = logging.getLogger(__name__)
 
 
-def handle_webrtc_message(ctx: SessionContext, message: WebRTCMessage):
+async def handle_webrtc_message(ctx: SessionContext, message: WebRTCMessage):
     message_type = message.type
+
+    logger.debug(f"Handling WebRTC message of type: {message_type}. Message: {message}")
 
     if message_type == "offer":
         await handle_offer(ctx, message.data)
@@ -56,6 +64,8 @@ async def handle_offer(ctx: SessionContext, offer_data: dict):
 
     websocket = await ctx.get(WEBSOCKET)
 
+    assert websocket is not None, "WebSocket is always initialized here"
+
     await websocket.send_message(
         WebRTCMessage(
             type="answer",
@@ -68,10 +78,15 @@ async def handle_offer(ctx: SessionContext, offer_data: dict):
         )
     )
 
+    # Register WebRTC
+    await ctx.register(WEBRTC_PEER_CONNECTION, peer_connection)
+
 
 async def handle_ice_candidate(ctx: SessionContext, candidate_data: dict):
     """Handle ICE candidate"""
-    peer_connection = await ctx.get(WEBRTC_PEER_CONNECTION)
+    peer_connection = await ctx.get_or_wait(WEBRTC_PEER_CONNECTION)
+
+    logger.debug("Found Ice Candidate")
 
     parsed = parse_candidate(candidate_data["candidate"]["candidate"])
 
@@ -98,23 +113,53 @@ async def handle_ice_candidate(ctx: SessionContext, candidate_data: dict):
 async def audio_processing_task(track: MediaStreamTrack, ctx: SessionContext):
     """Process incoming audio frames from WebRTC track and send to session context"""
 
-    while True:
-        frame = await track.recv()
-        assert isinstance(frame, AudioFrame), "Incoming audio track is not a frame!"
+    processed_audio_buffer: list[PCMAudioArray] = []
 
-        audio_array = to_pcm(frame)
+    try:
+        while True:
+            frame = await track.recv()
+            assert isinstance(frame, AudioFrame), "Incoming audio track is not a frame!"
 
-        ctx.ingest_audio(audio_array)
+            # Decompress
+            chunk = to_pcm(frame)
 
-    ## TODO: Add try finally here
-    await finalize_session(ctx)
+            processed_audio_buffer.extend(chunk.data)
+
+            # Arbitrary threshold
+            if len(processed_audio_buffer) > 100:
+                # Use last chunk since we standardize all the layouts
+                # to be the same.
+                await ctx.ingest_audio(
+                    AudioChunk(
+                        processed_audio_buffer,
+                        chunk.framerate,
+                        chunk.number_of_channels,
+                    )
+                )
+
+                processed_audio_buffer.clear()
+    except MediaStreamError:
+        pass  # Expected
+    finally:
+        # Flush audio_buffer
+        if len(processed_audio_buffer) > 0:
+            await ctx.ingest_audio(
+                AudioChunk(
+                    processed_audio_buffer, chunk.framerate, chunk.number_of_channels
+                )
+            )
+
+        await finalize_session(ctx)
+        print("Ended!")
 
 
 async def finalize_session(ctx: SessionContext):
     """Finalize the session"""
 
-    peer_connection = await ctx.get(WEBRTC_PEER_CONNECTION)
+    peer_connection = await ctx.get_or_wait(WEBRTC_PEER_CONNECTION)
     await peer_connection.close()
+
+    await close_write_to_disk_audio_consumer(ctx)
 
 
 def parse_candidate(candidate_str: str) -> Optional[ICECandidate]:
