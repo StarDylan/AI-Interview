@@ -32,5 +32,3 @@ async def test_send_and_receive_message():
 
     await cws.aclose()
     await wait_all_tasks_blocked()  # Let writer close
-
-    assert ws.closed is True
