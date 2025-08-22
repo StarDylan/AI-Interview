@@ -3,7 +3,6 @@ from interview_helper.audio_stream_handler.audio_utils import (
     async_audio_write_to_disk_consumer_pair,
 )
 import logging
-import asyncio.exceptions
 
 from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
@@ -63,21 +62,15 @@ async def websocket_endpoint(websocket: WebSocket):
 
     cws = ConcurrentWebSocket(already_accepted_ws=websocket)
 
-    async with cws:  # instead of calling __aenter__ manually
-        try:
-            await context.register(WEBSOCKET, cws)
+    async with cws:
+        await context.register(WEBSOCKET, cws)
 
-            while True:
-                message = await cws.receive_message()
+        while True:
+            message = await cws.receive_message()
 
-                if isinstance(message, WebRTCMessage):
-                    await handle_webrtc_message(context, message)
-                # handle other message types...
-        except asyncio.CancelledError as e:
-            # client disconnected
-            # cleanup here if needed, then suppress the exception
-            # (or re-raise if you want uvicorn/starlette to see it)
-            print("Cancelled", e)
+            if isinstance(message, WebRTCMessage):
+                await handle_webrtc_message(context, message)
+            # handle other message types...
 
 
 if __name__ == "__main__":
