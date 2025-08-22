@@ -53,6 +53,8 @@ just create-cert
 
 ### 2. Backend Setup
 
+Copy the .env.example to .env, then to install dependencies:
+
 ```bash
 cd backend
 uv sync
@@ -69,13 +71,21 @@ pnpm install
 
 The system uses Vosk for speech recognition. Please download a model from https://alphacephei.com/vosk/models and place into `backend/vosk_models/`.
 
+### 5. Pre-Commit Hook Setup
+
+In the root of the repo run:
+
+```bash
+pre-commit install
+```
+
 ## Development
 
 ### Start Backend Server
 
 ```bash
 cd backend
-uv run python server.py
+dotenvx run -- uv run .\src\main.py
 ```
 
 ### Start Frontend Development Server

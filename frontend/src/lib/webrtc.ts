@@ -1,6 +1,6 @@
 // Configuration
 
-import type { Message, SignalingMessage } from "./message";
+import type { Envelope, Message, SignalingMessage } from "./message";
 import { toWebSocketUrl } from "./url-utils";
 
 const BACKEND = import.meta.env.VITE_BACKEND_URL;
@@ -40,11 +40,9 @@ export function createWebRTCClient({
 
   async function handleWebsocketSignaling(msg: SignalingMessage) {
     if (msg.type === "answer") {
-      console.log("Received answer:", msg.sdp);
-      await pc.setRemoteDescription(new RTCSessionDescription(msg.sdp));
+      await pc.setRemoteDescription(new RTCSessionDescription(msg.data.sdp));
     } else if (msg.type === "ice_candidate") {
-      console.log("Received ICE candidate:", msg.candidate);
-      await pc.addIceCandidate(new RTCIceCandidate(msg.candidate));
+      await pc.addIceCandidate(new RTCIceCandidate(msg.data.candidate));
     }
   }
 
@@ -62,7 +60,8 @@ export function createWebRTCClient({
       ws = null;
     } else {
       ws = null;
-      console.log("ws connection error");
+      console.warn("ws connection error");
+      console.warn(evt);
     }
     console.log("WebSocket connection closed");
     onConnectionChange("disconnected");
@@ -88,7 +87,9 @@ export function createWebRTCClient({
         sendMessage(
           {
             type: "ice_candidate",
-            candidate: event.candidate,
+            data: {
+              candidate: event.candidate,
+            },
           },
           ws,
         );
@@ -145,8 +146,8 @@ export function createWebRTCClient({
 export function initWebSocket(onSignal: (msg: Message) => void) {
   const ws = new WebSocket(SIGNALING_SERVER_URL);
   ws.onmessage = ({ data }) => {
-    const msg = JSON.parse(data);
-    onSignal(msg);
+    const msg = JSON.parse(data) as Envelope;
+    onSignal(msg.message);
   };
 
   return ws;
@@ -181,8 +182,9 @@ async function setupLocalStream() {
  * @param {Object} message - { sdp } or { candidate }
  */
 export function sendMessage(message: Message, ws: WebSocket) {
+  const envelope: Envelope = { message };
   if (ws && ws.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify(message));
+    ws.send(JSON.stringify(envelope));
   }
 }
 /**
@@ -195,7 +197,9 @@ export async function createAndSendOffer(pc: RTCPeerConnection, ws: WebSocket) {
   sendMessage(
     {
       type: "offer",
-      sdp: pc.localDescription as RTCSessionDescriptionInit,
+      data: {
+        sdp: pc.localDescription as RTCSessionDescriptionInit,
+      },
     },
     ws,
   );

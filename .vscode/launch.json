@@ -1,0 +1,13 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Backend Debugger",
+      "type": "debugpy",
+      "request": "launch",
+      "program": "${workspaceFolder}/backend/src/main.py",
+      "console": "integratedTerminal",
+      "cwd": "${workspaceFolder}/backend"
+    }
+  ]
+}

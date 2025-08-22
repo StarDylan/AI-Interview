@@ -6,17 +6,23 @@ export const MessageType = {
 
 interface OfferMessage {
   type: typeof MessageType.OFFER;
-  sdp: RTCSessionDescriptionInit;
+  data: {
+    sdp: RTCSessionDescriptionInit;
+  };
 }
 
 interface AnswerMessage {
   type: typeof MessageType.ANSWER;
-  sdp: RTCSessionDescriptionInit;
+  data: {
+    sdp: RTCSessionDescriptionInit;
+  };
 }
 
 interface IceCandidateMessage {
   type: typeof MessageType.ICE_CANDIDATE;
-  candidate: RTCIceCandidateInit;
+  data: {
+    candidate: RTCIceCandidateInit;
+  };
 }
 
 export type SignalingMessage =
@@ -25,3 +31,7 @@ export type SignalingMessage =
   | IceCandidateMessage;
 
 export type Message = SignalingMessage;
+
+export interface Envelope {
+  message: Message;
+}
