@@ -16,19 +16,23 @@ async def test_send_and_receive_message():
     await ws.accept()
 
     cws = ConcurrentWebSocket(already_accepted_ws=ws)
-    await cws.start()
+    async with cws:
+        # Try to start it again to show no issues
+        await cws.start()
 
-    msg = TranscriptionMessage(session_id="sess1", text="hello world")
-    await cws.send_message(msg)
-    await wait_all_tasks_blocked()  # Let writer run
+        msg = TranscriptionMessage(session_id="sess1", text="hello world")
+        await cws.send_message(msg)
+        await wait_all_tasks_blocked()  # Let writer run
 
-    assert len(ws.sent_messages) == 1
-    assert Envelope.model_validate_json(ws.sent_messages[0]).message == msg
+        assert len(ws.sent_messages) == 1
+        assert Envelope.model_validate_json(ws.sent_messages[0]).message == msg
 
-    ws.enqueue(Envelope(message=msg).model_dump_json())
-    recv_msg = await cws.receive_message()
+        ws.enqueue(Envelope(message=msg).model_dump_json())
+        recv_msg = await cws.receive_message()
 
-    assert recv_msg == msg
+        assert recv_msg == msg
 
-    await cws.aclose()
     await wait_all_tasks_blocked()  # Let writer close
+
+    # Check that closing it again doesn't break anything
+    await cws.aclose()

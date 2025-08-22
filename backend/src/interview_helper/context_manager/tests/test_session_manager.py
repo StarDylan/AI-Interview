@@ -53,5 +53,30 @@ async def test_content_manager_can_wait():
             str2 = "hello2"
             await ctx.register(test_resource_key2, str2)
 
-            # Exiting the TaskGroup waits for waiter to finish.
+    # Exiting the TaskGroup waits for waiter to finish.
     assert got["val"] == "hello2"
+
+    # Ensure that the context is unregistered properly
+    await context_manager.unregister_all(ctx.session_id)
+
+    # Can't access session anymore! It is unregistered
+    with pytest.raises(AssertionError):
+        await ctx.get(test_resource_key1)
+
+
+async def test_content_manager_basic_can_wait():
+    test_resource_key1 = ResourceKey[str]("string")
+    context_manager = AppContextManager(())
+    ctx = await context_manager.new_session()
+
+    # Test basic get_and_wait
+    await ctx.register(test_resource_key1, "hello1")
+    assert await ctx.get_or_wait(test_resource_key1) == "hello1"
+
+
+async def test_get_settings():
+    cm = AppContextManager(())
+
+    # Ensure that this causes an error so we don't inadvertently use it in tests
+    with pytest.raises(AssertionError):
+        cm.get_settings()

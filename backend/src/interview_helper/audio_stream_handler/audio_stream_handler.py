@@ -150,7 +150,6 @@ async def audio_processing_task(track: MediaStreamTrack, ctx: SessionContext):
             )
 
         await finalize_session(ctx)
-        print("Ended!")
 
 
 async def finalize_session(ctx: SessionContext):
