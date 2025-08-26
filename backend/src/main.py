@@ -1,8 +1,15 @@
 #!/usr/bin/env python3
+from interview_helper.security.http import verify_jwt_token
+from interview_helper.security.jwks_cache import JWKSCache
+from authlib.integrations.starlette_client.apps import StarletteOAuth2App
+from typing import cast
+from typing import Annotated
 from interview_helper.audio_stream_handler.audio_utils import (
     async_audio_write_to_disk_consumer_pair,
 )
 import logging
+import httpx
+import jwt
 
 from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
@@ -13,7 +20,8 @@ from interview_helper.audio_stream_handler.audio_stream_handler import (
     handle_webrtc_message,
 )
 
-from fastapi import FastAPI, WebSocket
+from fastapi.security import OpenIdConnect
+from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -39,7 +47,6 @@ app = FastAPI(
 
 app.add_middleware(
     # FIXME: This is due to Pyrefly not being able to handle Generic ParamSpec and Protocol.
-    # See https://github.com/facebook/pyrefly/issues/43
     # pyrefly: ignore[bad-argument-type]
     CORSMiddleware,
     allow_origins=session_manager.get_settings().cors_allow_origins,
@@ -48,11 +55,27 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# TODO: Maybe redo with https://github.com/fastapi/fastapi/discussions/10175
+# TODO: Configure via ENV Vars
+ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_WvxLx7BB1/"
+OIDC_CONFIG_URL = ISSUER.rstrip("/") + "/.well-known/openid-configuration"
+CLIENT_ID="7i45dh6u7tt5lnpq3c8sjus39p"
+
+oidc_config = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
+
+signing_algos = oidc_config.get("id_token_signing_alg_values_supported", [])
+jwks_client = jwt.PyJWKClient(oidc_config["jwks_uri"])
+
+oidc_scheme = OpenIdConnect(openIdConnectUrl=OIDC_CONFIG_URL)
 
 @app.get("/")
 async def root():
     return "Interview Helper Backend"
 
+@app.get("/secured")
+async def secured(token: Annotated[str, Depends(oidc_scheme)]):
+    verify_jwt_token(token, jwks_client, CLIENT_ID, signing_algos)
+    return "Secured Endpoint"
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
