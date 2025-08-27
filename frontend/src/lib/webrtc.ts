@@ -3,7 +3,7 @@
 import type { Envelope, Message, SignalingMessage } from "./message";
 import { toWebSocketUrl } from "./url-utils";
 
-const BACKEND = import.meta.env.VITE_BACKEND_URL;
+const BACKEND = import.meta.env.VITE_BACKEND_URL + "/ws";
 
 export const SIGNALING_SERVER_URL = toWebSocketUrl(BACKEND);
 

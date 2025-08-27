@@ -35,7 +35,10 @@ check_env_var() {
 
 # Backend API URL - required for WebRTC connections
 check_env_var "${APP_PREFIX}BACKEND_URL"
-
+check_env_var "${APP_PREFIX}SITE_URL"
+check_env_var "${APP_PREFIX}OIDC_AUTHORITY"
+check_env_var "${APP_PREFIX}OIDC_DOMAIN"
+check_env_var "${APP_PREFIX}OIDC_CLIENT_ID"
 
 # Validate nginx configuration
 echo "Validating nginx configuration..."

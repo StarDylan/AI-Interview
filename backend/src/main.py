@@ -1,8 +1,9 @@
 #!/usr/bin/env python3
+from starlette.responses import JSONResponse
+from fastapi.exceptions import HTTPException
+from starlette.responses import RedirectResponse
+from typing import Dict
 from interview_helper.security.http import verify_jwt_token
-from interview_helper.security.jwks_cache import JWKSCache
-from authlib.integrations.starlette_client.apps import StarletteOAuth2App
-from typing import cast
 from typing import Annotated
 from interview_helper.audio_stream_handler.audio_utils import (
     async_audio_write_to_disk_consumer_pair,
@@ -21,7 +22,7 @@ from interview_helper.audio_stream_handler.audio_stream_handler import (
 )
 
 from fastapi.security import OpenIdConnect
-from fastapi import FastAPI, WebSocket, Depends
+from fastapi import FastAPI, WebSocket, Depends, status
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -59,23 +60,109 @@ app.add_middleware(
 # TODO: Configure via ENV Vars
 ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_WvxLx7BB1/"
 OIDC_CONFIG_URL = ISSUER.rstrip("/") + "/.well-known/openid-configuration"
-CLIENT_ID="7i45dh6u7tt5lnpq3c8sjus39p"
+CLIENT_ID = "7i45dh6u7tt5lnpq3c8sjus39p"
+CLIENT_SECRET = "1os3k33evdio00scb6ts7m0r2nrss4q2se5n1jj0fpttedld8r2a"
+SITE_URL = "http://localhost:3000"
+REDIRECT_URI = f"{SITE_URL}/auth/callback"
+SCOPE = "openid profile email"
+
+FRONTEND_REDIRECT_URI = "http://localhost:3000/auth/callback"
 
 oidc_config = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
 
 signing_algos = oidc_config.get("id_token_signing_alg_values_supported", [])
 jwks_client = jwt.PyJWKClient(oidc_config["jwks_uri"])
+AUTHORIZATION_ENDPOINT = oidc_config["authorization_endpoint"]
+TOKEN_ENDPOINT = oidc_config["token_endpoint"]
 
 oidc_scheme = OpenIdConnect(openIdConnectUrl=OIDC_CONFIG_URL)
+
 
 @app.get("/")
 async def root():
     return "Interview Helper Backend"
 
+
+active_states: Dict[str, tuple[str, str]] = {}
+
+
+@app.get("/login")
+async def login_redirect():
+    """
+    Frontend calls this endpoint to initiate the login flow.
+    """
+    state = "some_random_string_from_the_frontend"  # In a real app, generate a secure random string
+    active_states[state] = ("valid", "")
+
+    auth_url = (
+        f"{AUTHORIZATION_ENDPOINT}?"
+        f"response_type=code&"
+        f"client_id={CLIENT_ID}&"
+        f"redirect_uri={REDIRECT_URI}&"
+        f"scope={SCOPE}&"
+        f"state={state}"
+    )
+    return RedirectResponse(auth_url)
+
+
+@app.get("/auth/callback")
+async def auth_callback(code: str, state: str):
+    """
+    This is the callback endpoint where the IdP redirects the user.
+    The backend exchanges the code for tokens and returns them to the frontend.
+    """
+    if state not in active_states or active_states[state][0] != "valid":
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter."
+        )
+    del active_states[state]
+
+    # Exchange the authorization code for tokens (server-to-server)
+    async with httpx.AsyncClient() as client:
+        token_data = {
+            "grant_type": "authorization_code",
+            "code": code,
+            "redirect_uri": REDIRECT_URI,
+            "client_id": CLIENT_ID,
+            "client_secret": CLIENT_SECRET,
+        }
+        try:
+            response = await client.post(TOKEN_ENDPOINT, data=token_data)
+            response.raise_for_status()
+            tokens = response.json()
+        except httpx.HTTPStatusError as e:
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"Failed to exchange code for tokens: {e.response.text}",
+            )
+
+    active_states[state] = ("tokens_received", tokens)
+
+    # Step 6: Redirect the user back to the frontend with the state parameter
+    redirect_url = f"{FRONTEND_REDIRECT_URI}?state={state}"
+    return RedirectResponse(redirect_url)
+    # Return the tokens directly to the frontend.
+    # The frontend will now store these tokens and handle subsequent authentication.
+    return JSONResponse(
+        content={
+            "access_token": tokens.get("access_token"),
+            "id_token": tokens.get("id_token"),
+            "token_type": tokens.get("token_type"),
+            "expires_in": tokens.get("expires_in"),
+            "scope": tokens.get("scope"),
+            "refresh_token": tokens.get("refresh_token", None),  # Optional
+        }
+    )
+
+
 @app.get("/secured")
 async def secured(token: Annotated[str, Depends(oidc_scheme)]):
-    verify_jwt_token(token, jwks_client, CLIENT_ID, signing_algos)
+    print(token)
+    verify_jwt_token(
+        token.removeprefix("Bearer "), jwks_client, CLIENT_ID, signing_algos
+    )
     return "Secured Endpoint"
+
 
 @app.websocket("/ws")
 async def websocket_endpoint(websocket: WebSocket):
