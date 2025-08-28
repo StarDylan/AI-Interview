@@ -9,12 +9,7 @@ repos:
     hooks:
       - id: conventional-pre-commit
         stages: [commit-msg]
-        args:
-          [
-            "--verbose",
-            "--force-scope",
-            "--scopes=backend,frontend,ci,tooling,project",
-          ]
+        args: ["--verbose", "--force-scope", "--scopes=backend,frontend,ci,tooling,project"]
 
   # --- Backend (Python) ---
   - repo: https://github.com/astral-sh/ruff-pre-commit
@@ -62,9 +57,9 @@ repos:
         pass_filenames: false
         stages: [pre-commit]
 
-  - repo: https://github.com/pre-commit/mirrors-eslint
-    rev: "v9.30.1"
-    hooks:
       - id: eslint
-        files: ^frontend/
-        stages: [pre-commit]
+        language: node
+        name: Run ESLint via pnpm
+        entry: pnpm
+        pass_filenames: false
+        args: ["--dir=frontend/", "run", "lint"]
