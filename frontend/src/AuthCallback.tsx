@@ -14,18 +14,20 @@ export default function AuthCallback() {
 
     if (auth.error) {
         return (
-            <div style={{ 
-                display: 'flex', 
-                flexDirection: 'column',
-                justifyContent: 'center', 
-                alignItems: 'center', 
-                height: '100vh',
-                gap: '1rem'
-            }}>
+            <div
+                style={{
+                    display: "flex",
+                    flexDirection: "column",
+                    justifyContent: "center",
+                    alignItems: "center",
+                    height: "100vh",
+                    gap: "1rem",
+                }}
+            >
                 <h2>Authentication Error</h2>
                 <p>Error: {auth.error.message}</p>
-                <button 
-                    onClick={() => window.location.href = "/"}
+                <button
+                    onClick={() => (window.location.href = "/")}
                     style={{
                         padding: "12px 24px",
                         fontSize: "16px",
@@ -43,12 +45,14 @@ export default function AuthCallback() {
     }
 
     return (
-        <div style={{ 
-            display: 'flex', 
-            justifyContent: 'center', 
-            alignItems: 'center', 
-            height: '100vh' 
-        }}>
+        <div
+            style={{
+                display: "flex",
+                justifyContent: "center",
+                alignItems: "center",
+                height: "100vh",
+            }}
+        >
             Processing authentication...
         </div>
     );

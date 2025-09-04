@@ -1,6 +1,4 @@
 #!/usr/bin/env python3
-from starlette.responses import JSONResponse
-from fastapi.exceptions import HTTPException
 from starlette.responses import RedirectResponse
 from typing import Dict
 from interview_helper.security.http import verify_jwt_token
@@ -22,7 +20,7 @@ from interview_helper.audio_stream_handler.audio_stream_handler import (
 )
 
 from fastapi.security import OpenIdConnect
-from fastapi import FastAPI, WebSocket, Depends, status
+from fastapi import FastAPI, WebSocket, Depends
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -56,11 +54,13 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Google OIDC Configuration - configured via environment variables
-ISSUER = "https://accounts.google.com"
-OIDC_CONFIG_URL = ISSUER.rstrip("/") + "/.well-known/openid-configuration"
-CLIENT_ID = session_manager.get_settings().google_client_id
-CLIENT_SECRET = session_manager.get_settings().google_client_secret
+# OIDC Configuration - configured via environment variables
+
+OIDC_CONFIG_URL = (
+    session_manager.get_settings().oidc_authority.rstrip("/")
+    + "/.well-known/openid-configuration"
+)
+CLIENT_ID = session_manager.get_settings().oidc_client_id
 SITE_URL = session_manager.get_settings().site_url
 REDIRECT_URI = f"{SITE_URL}/auth/callback"
 SCOPE = "openid profile email"
@@ -104,56 +104,6 @@ async def login_redirect():
     return RedirectResponse(auth_url)
 
 
-@app.get("/auth/callback")
-async def auth_callback(code: str, state: str):
-    """
-    This is the callback endpoint where the IdP redirects the user.
-    The backend exchanges the code for tokens and returns them to the frontend.
-    """
-    if state not in active_states or active_states[state][0] != "valid":
-        raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter."
-        )
-    del active_states[state]
-
-    # Exchange the authorization code for tokens (server-to-server)
-    async with httpx.AsyncClient() as client:
-        token_data = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": REDIRECT_URI,
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-        }
-        try:
-            response = await client.post(TOKEN_ENDPOINT, data=token_data)
-            response.raise_for_status()
-            tokens = response.json()
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to exchange code for tokens: {e.response.text}",
-            )
-
-    active_states[state] = ("tokens_received", tokens)
-
-    # Step 6: Redirect the user back to the frontend with the state parameter
-    redirect_url = f"{FRONTEND_REDIRECT_URI}?state={state}"
-    return RedirectResponse(redirect_url)
-    # Return the tokens directly to the frontend.
-    # The frontend will now store these tokens and handle subsequent authentication.
-    return JSONResponse(
-        content={
-            "access_token": tokens.get("access_token"),
-            "id_token": tokens.get("id_token"),
-            "token_type": tokens.get("token_type"),
-            "expires_in": tokens.get("expires_in"),
-            "scope": tokens.get("scope"),
-            "refresh_token": tokens.get("refresh_token", None),  # Optional
-        }
-    )
-
-
 @app.get("/auth/token")
 async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
     """
@@ -161,19 +111,17 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
     This endpoint verifies the token and returns user claims.
     """
     clean_token = token.removeprefix("Bearer ")
-    user_claims = verify_jwt_token(
-        clean_token, jwks_client, CLIENT_ID, signing_algos
-    )
-    
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+
     return {
         "token": clean_token,
         "user": {
             "sub": user_claims.sub,
             "name": user_claims.name,
             "email": user_claims.email,
-            "picture": getattr(user_claims, 'picture', None)
+            "picture": getattr(user_claims, "picture", None),
         },
-        "expires_at": user_claims.exp
+        "expires_at": user_claims.exp,
     }
 
 
@@ -190,8 +138,8 @@ async def secured(token: Annotated[str, Depends(oidc_scheme)]):
         "user": {
             "sub": user_claims.sub,
             "name": user_claims.name,
-            "email": user_claims.email
-        }
+            "email": user_claims.email,
+        },
     }
 
 
@@ -205,18 +153,16 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
     if not token:
         await websocket.close(code=1008, reason="Authentication required")
         return
-    
+
     try:
         # Verify the JWT token
-        user_claims = verify_jwt_token(
-            token, jwks_client, CLIENT_ID, signing_algos
-        )
+        user_claims = verify_jwt_token(token, jwks_client, CLIENT_ID, signing_algos)
         logger.info(f"WebSocket connection authenticated for user: {user_claims.sub}")
     except Exception as e:
         logger.warning(f"WebSocket authentication failed: {e}")
         await websocket.close(code=1008, reason="Invalid authentication token")
         return
-    
+
     await websocket.accept()
     context = await session_manager.new_session()
 
@@ -224,7 +170,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
 
     async with cws:
         await context.register(WEBSOCKET, cws)
-        
+
         # Store user information in the session context
         await context.register("user_claims", user_claims)
 

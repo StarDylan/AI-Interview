@@ -27,9 +27,10 @@ export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
     const [activeTab, setActiveTab] = useState<string | null>("Home");
 
     // Extract user information from OIDC user object
-    const userName = user?.profile?.name || user?.profile?.preferred_username || "User";
+    const userName =
+        user?.profile?.name || user?.profile?.preferred_username || "User";
     const userEmail = user?.profile?.email || "";
-    
+
     // Use first letter of name for avatar if no image
     const avatarText = userName.charAt(0).toUpperCase();
 
@@ -83,18 +84,22 @@ export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
 
             <AppShell.Main>
                 <Container fluid>
-                    <div style={{ padding: '2rem' }}>
+                    <div style={{ padding: "2rem" }}>
                         <h2>Welcome, {userName}!</h2>
                         {userEmail && <p>Email: {userEmail}</p>}
                         <p>
-                            You are successfully authenticated with Google OIDC. 
+                            You are successfully authenticated with Google OIDC.
                             The main content of your application goes here.
                         </p>
-                        
+
                         <WebSocketDemo />
-                        
-                        <div style={{ marginTop: '2rem' }}>
-                            <Button onClick={onSignOut} variant="outline" color="red">
+
+                        <div style={{ marginTop: "2rem" }}>
+                            <Button
+                                onClick={onSignOut}
+                                variant="outline"
+                                color="red"
+                            >
                                 Sign Out
                             </Button>
                         </div>
