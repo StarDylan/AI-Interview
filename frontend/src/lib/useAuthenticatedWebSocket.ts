@@ -1,5 +1,11 @@
 /**
- * WebSocket hook with authentication support for the Interview Helper app.
+ * WebSocket hook with ticket-based authentication support for the Interview Helper app.
+ * 
+ * This hook implements a secure two-step authentication process:
+ * 1. First, it requests an authentication ticket from the backend using the user's JWT token
+ * 2. Then, it uses the ticket to establish the WebSocket connection
+ * 
+ * This approach provides enhanced security by ensuring tickets are single-use and time-limited.
  */
 
 import { useAuth } from "react-oidc-context";
@@ -40,13 +46,31 @@ export function useAuthenticatedWebSocket({
                 import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
             const wsUrl = backendUrl.replace("http", "ws");
 
-            // Create WebSocket connection with authentication token
-            const ws = new WebSocket(
-                `${wsUrl}/ws?token=${auth.user.access_token}`,
-            );
+            // Step 1: Request an authentication ticket from the backend
+            const ticketResponse = await fetch(`${backendUrl}/auth/ticket`, {
+                method: "GET",
+                headers: {
+                    Authorization: `Bearer ${auth.user.access_token}`,
+                    "Content-Type": "application/json",
+                },
+            });
+
+            if (!ticketResponse.ok) {
+                throw new Error(
+                    `Failed to obtain authentication ticket: ${ticketResponse.status}`,
+                );
+            }
+
+            const ticketData = await ticketResponse.json();
+            const ticketId = ticketData.ticket_id;
+
+            console.log("Obtained authentication ticket:", ticketId);
+
+            // Step 2: Create WebSocket connection with the ticket
+            const ws = new WebSocket(`${wsUrl}/ws?ticket_id=${ticketId}`);
 
             ws.onopen = () => {
-                console.log("WebSocket connected");
+                console.log("WebSocket connected with ticket-based authentication");
                 setConnectionStatus("connected");
                 onConnectionChange?.("connected");
             };
@@ -70,7 +94,7 @@ export function useAuthenticatedWebSocket({
                 onConnectionChange?.("disconnected");
 
                 if (event.code === 1008) {
-                    setError("Authentication failed");
+                    setError("Authentication failed - ticket invalid or expired");
                 } else if (event.code !== 1000) {
                     setError(
                         `Connection closed: ${event.reason || "Unknown error"}`,
@@ -88,7 +112,8 @@ export function useAuthenticatedWebSocket({
             wsRef.current = ws;
         } catch (err) {
             console.error("Failed to connect to WebSocket:", err);
-            setError("Failed to connect");
+            const errorMessage = err instanceof Error ? err.message : "Unknown error";
+            setError(`Failed to connect: ${errorMessage}`);
             setConnectionStatus("disconnected");
             onConnectionChange?.("disconnected");
         }

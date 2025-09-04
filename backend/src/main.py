@@ -2,7 +2,9 @@
 from starlette.responses import RedirectResponse
 from typing import Dict
 from interview_helper.security.http import verify_jwt_token
+from interview_helper.security.tickets import ticket_store, TicketResponse
 from typing import Annotated
+from fastapi import Request
 from interview_helper.audio_stream_handler.audio_utils import (
     async_audio_write_to_disk_consumer_pair,
 )
@@ -104,6 +106,36 @@ async def login_redirect():
     return RedirectResponse(auth_url)
 
 
+@app.get("/auth/ticket", response_model=TicketResponse)
+async def generate_websocket_ticket(
+    request: Request, 
+    token: Annotated[str, Depends(oidc_scheme)]
+):
+    """
+    Generate an authentication ticket for WebSocket connections.
+    
+    This endpoint requires a valid JWT token and returns a single-use ticket
+    that can be used to authenticate WebSocket connections. The ticket includes
+    the client's IP address for additional security.
+    """
+    # Verify the JWT token
+    clean_token = token.removeprefix("Bearer ")
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+    
+    # Get client IP address
+    client_ip = request.client.host
+    
+    # Generate the ticket
+    ticket = ticket_store.generate_ticket(user_claims.sub, client_ip)
+    
+    logger.info(f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}")
+    
+    return TicketResponse(
+        ticket_id=ticket.ticket_id,
+        expires_in=int(ticket.expires_at - ticket.created_at)
+    )
+
+
 @app.get("/auth/token")
 async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
     """
@@ -144,23 +176,37 @@ async def secured(token: Annotated[str, Depends(oidc_scheme)]):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, token: str = None):
+async def websocket_endpoint(websocket: WebSocket, ticket_id: str = None):
     """
-    WebSocket endpoint with authentication.
-    Clients should pass the JWT token as a query parameter: /ws?token=<jwt_token>
+    WebSocket endpoint with ticket-based authentication.
+    
+    Clients should first obtain a ticket from /auth/ticket and then pass it
+    as a query parameter: /ws?ticket_id=<ticket_id>
     """
-    # Authenticate the WebSocket connection
-    if not token:
-        await websocket.close(code=1008, reason="Authentication required")
+    # Authenticate the WebSocket connection using ticket
+    if not ticket_id:
+        await websocket.close(code=1008, reason="Authentication ticket required")
         return
 
+    # Get client IP address
+    client_ip = websocket.client.host
+
     try:
-        # Verify the JWT token
-        user_claims = verify_jwt_token(token, jwks_client, CLIENT_ID, signing_algos)
-        logger.info(f"WebSocket connection authenticated for user: {user_claims.sub}")
+        # Validate the ticket
+        ticket = ticket_store.validate_ticket(ticket_id, client_ip)
+        
+        if not ticket:
+            await websocket.close(code=1008, reason="Invalid or expired authentication ticket")
+            return
+        
+        logger.info(f"WebSocket connection authenticated for user: {ticket.user_id} using ticket {ticket_id}")
+        
+        # Clean up the used ticket
+        ticket_store.cleanup_ticket(ticket_id)
+        
     except Exception as e:
-        logger.warning(f"WebSocket authentication failed: {e}")
-        await websocket.close(code=1008, reason="Invalid authentication token")
+        logger.warning(f"WebSocket ticket validation failed: {e}")
+        await websocket.close(code=1008, reason="Authentication failed")
         return
 
     await websocket.accept()
@@ -172,7 +218,8 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
         await context.register(WEBSOCKET, cws)
 
         # Store user information in the session context
-        await context.register("user_claims", user_claims)
+        await context.register("user_id", ticket.user_id)
+        await context.register("client_ip", ticket.client_ip)
 
         while True:
             try:
@@ -182,7 +229,7 @@ async def websocket_endpoint(websocket: WebSocket, token: str = None):
                     await handle_webrtc_message(context, message)
                 # handle other message types...
             except Exception as e:
-                logger.error(f"WebSocket error for user {user_claims.sub}: {e}")
+                logger.error(f"WebSocket error for user {ticket.user_id}: {e}")
                 break
 
 
