@@ -9,11 +9,13 @@ import {
     Button,
     Menu,
 } from "@mantine/core";
+import { User } from "oidc-client-ts";
+import { WebSocketDemo } from "./lib/WebSocketClient";
 
-const user = {
-    name: "Jane Spoonfighter",
-    image: "https://raw.githubusercontent.com/mantinedev/mantine/master/.demo/avatars/avatar-5.png",
-};
+interface AppLayoutProps {
+    user?: User | null;
+    onSignOut?: () => void;
+}
 
 const navItems = [
     { link: "home", label: "Home" },
@@ -21,8 +23,15 @@ const navItems = [
     { link: "settings", label: "Settings" },
 ];
 
-export default function AppLayout() {
+export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
     const [activeTab, setActiveTab] = useState<string | null>("Home");
+
+    // Extract user information from OIDC user object
+    const userName = user?.profile?.name || user?.profile?.preferred_username || "User";
+    const userEmail = user?.profile?.email || "";
+    
+    // Use first letter of name for avatar if no image
+    const avatarText = userName.charAt(0).toUpperCase();
 
     return (
         <AppShell header={{ height: 60 }} padding="md">
@@ -30,7 +39,7 @@ export default function AppLayout() {
                 <Group h="100%" justify="space-between">
                     <Group>
                         <Text fw={700} size="lg">
-                            My Application
+                            Interview Helper
                         </Text>
                     </Group>
                     <Group gap="sm" visibleFrom="sm">
@@ -48,14 +57,16 @@ export default function AppLayout() {
                     </Group>
                     <Group visibleFrom="sm" gap="xs">
                         <Text fw={500} size="sm">
-                            {user.name}
+                            {userName}
                         </Text>
                         <Avatar
-                            src={user.image}
-                            alt={user.name}
+                            alt={userName}
                             radius="xl"
                             size="md"
-                        />
+                            color="blue"
+                        >
+                            {avatarText}
+                        </Avatar>
                     </Group>
                     <Menu width="100%" offset={20}>
                         <Menu.Target>
@@ -64,7 +75,7 @@ export default function AppLayout() {
                         <Menu.Dropdown>
                             <Menu.Item>Profile</Menu.Item>
                             <Menu.Item>Settings</Menu.Item>
-                            <Menu.Item>Logout</Menu.Item>
+                            <Menu.Item onClick={onSignOut}>Logout</Menu.Item>
                         </Menu.Dropdown>
                     </Menu>
                 </Group>
@@ -72,11 +83,22 @@ export default function AppLayout() {
 
             <AppShell.Main>
                 <Container fluid>
-                    <p>
-                        The main content of your application goes here. The
-                        header and navbar are now controlled by the AppShell
-                        component, and the tabs are responsive.
-                    </p>
+                    <div style={{ padding: '2rem' }}>
+                        <h2>Welcome, {userName}!</h2>
+                        {userEmail && <p>Email: {userEmail}</p>}
+                        <p>
+                            You are successfully authenticated with Google OIDC. 
+                            The main content of your application goes here.
+                        </p>
+                        
+                        <WebSocketDemo />
+                        
+                        <div style={{ marginTop: '2rem' }}>
+                            <Button onClick={onSignOut} variant="outline" color="red">
+                                Sign Out
+                            </Button>
+                        </div>
+                    </div>
                 </Container>
             </AppShell.Main>
         </AppShell>

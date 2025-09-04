@@ -2,7 +2,7 @@
 name = "thesisv2"
 version = "0.1.0"
 description = "Add your description here"
-requires-python = ">=3.13"
+requires-python = ">=3.12"
 dependencies = [
     "aiortc>=1.13.0",
     "anyio>=4.9.0",

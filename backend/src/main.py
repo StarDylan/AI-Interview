@@ -56,17 +56,16 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: Maybe redo with https://github.com/fastapi/fastapi/discussions/10175
-# TODO: Configure via ENV Vars
-ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_WvxLx7BB1/"
+# Google OIDC Configuration - configured via environment variables
+ISSUER = "https://accounts.google.com"
 OIDC_CONFIG_URL = ISSUER.rstrip("/") + "/.well-known/openid-configuration"
-CLIENT_ID = "7i45dh6u7tt5lnpq3c8sjus39p"
-CLIENT_SECRET = "1os3k33evdio00scb6ts7m0r2nrss4q2se5n1jj0fpttedld8r2a"
-SITE_URL = "http://localhost:3000"
+CLIENT_ID = session_manager.get_settings().google_client_id
+CLIENT_SECRET = session_manager.get_settings().google_client_secret
+SITE_URL = session_manager.get_settings().site_url
 REDIRECT_URI = f"{SITE_URL}/auth/callback"
 SCOPE = "openid profile email"
 
-FRONTEND_REDIRECT_URI = "http://localhost:3000/auth/callback"
+FRONTEND_REDIRECT_URI = session_manager.get_settings().frontend_redirect_uri
 
 oidc_config = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
 
@@ -155,18 +154,69 @@ async def auth_callback(code: str, state: str):
     )
 
 
+@app.get("/auth/token")
+async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
+    """
+    Get user information and return a clean token for WebSocket authentication.
+    This endpoint verifies the token and returns user claims.
+    """
+    clean_token = token.removeprefix("Bearer ")
+    user_claims = verify_jwt_token(
+        clean_token, jwks_client, CLIENT_ID, signing_algos
+    )
+    
+    return {
+        "token": clean_token,
+        "user": {
+            "sub": user_claims.sub,
+            "name": user_claims.name,
+            "email": user_claims.email,
+            "picture": getattr(user_claims, 'picture', None)
+        },
+        "expires_at": user_claims.exp
+    }
+
+
 @app.get("/secured")
 async def secured(token: Annotated[str, Depends(oidc_scheme)]):
-    print(token)
-    verify_jwt_token(
+    """
+    Example secured endpoint that requires authentication.
+    """
+    user_claims = verify_jwt_token(
         token.removeprefix("Bearer "), jwks_client, CLIENT_ID, signing_algos
     )
-    return "Secured Endpoint"
+    return {
+        "message": "Access granted to secured endpoint",
+        "user": {
+            "sub": user_claims.sub,
+            "name": user_claims.name,
+            "email": user_claims.email
+        }
+    }
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    # TODO: Authentication
+async def websocket_endpoint(websocket: WebSocket, token: str = None):
+    """
+    WebSocket endpoint with authentication.
+    Clients should pass the JWT token as a query parameter: /ws?token=<jwt_token>
+    """
+    # Authenticate the WebSocket connection
+    if not token:
+        await websocket.close(code=1008, reason="Authentication required")
+        return
+    
+    try:
+        # Verify the JWT token
+        user_claims = verify_jwt_token(
+            token, jwks_client, CLIENT_ID, signing_algos
+        )
+        logger.info(f"WebSocket connection authenticated for user: {user_claims.sub}")
+    except Exception as e:
+        logger.warning(f"WebSocket authentication failed: {e}")
+        await websocket.close(code=1008, reason="Invalid authentication token")
+        return
+    
     await websocket.accept()
     context = await session_manager.new_session()
 
@@ -174,13 +224,20 @@ async def websocket_endpoint(websocket: WebSocket):
 
     async with cws:
         await context.register(WEBSOCKET, cws)
+        
+        # Store user information in the session context
+        await context.register("user_claims", user_claims)
 
         while True:
-            message = await cws.receive_message()
+            try:
+                message = await cws.receive_message()
 
-            if isinstance(message, WebRTCMessage):
-                await handle_webrtc_message(context, message)
-            # handle other message types...
+                if isinstance(message, WebRTCMessage):
+                    await handle_webrtc_message(context, message)
+                # handle other message types...
+            except Exception as e:
+                logger.error(f"WebSocket error for user {user_claims.sub}: {e}")
+                break
 
 
 if __name__ == "__main__":

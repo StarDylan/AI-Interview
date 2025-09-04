@@ -1,5 +1,3 @@
-import React from "react";
-
 const BACKEND = import.meta.env.VITE_BACKEND_URL;
 
 const LoginButton = () => {
