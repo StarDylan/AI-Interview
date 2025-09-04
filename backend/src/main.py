@@ -11,6 +11,9 @@ from interview_helper.audio_stream_handler.audio_utils import (
 import logging
 import httpx
 import jwt
+import time
+from collections import defaultdict
+from typing import Dict, DefaultDict
 
 from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
@@ -22,7 +25,7 @@ from interview_helper.audio_stream_handler.audio_stream_handler import (
 )
 
 from fastapi.security import OpenIdConnect
-from fastapi import FastAPI, WebSocket, Depends
+from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -78,6 +81,10 @@ TOKEN_ENDPOINT = oidc_config["token_endpoint"]
 
 oidc_scheme = OpenIdConnect(openIdConnectUrl=OIDC_CONFIG_URL)
 
+# Rate limiting for ticket generation (per user)
+ticket_rate_limit: DefaultDict[str, list] = defaultdict(list)
+TICKET_RATE_LIMIT_PER_MINUTE = 10
+
 
 @app.get("/")
 async def root():
@@ -106,6 +113,21 @@ async def login_redirect():
     return RedirectResponse(auth_url)
 
 
+@app.get("/health")
+async def health_check():
+    """
+    Health check endpoint that includes ticket system status.
+    """
+    return {
+        "status": "healthy",
+        "service": "Interview Helper Backend",
+        "ticket_system": {
+            "active_tickets": ticket_store.get_active_tickets_count(),
+            "default_expiration_seconds": 300
+        }
+    }
+
+
 @app.get("/auth/ticket", response_model=TicketResponse)
 async def generate_websocket_ticket(
     request: Request, 
@@ -117,10 +139,30 @@ async def generate_websocket_ticket(
     This endpoint requires a valid JWT token and returns a single-use ticket
     that can be used to authenticate WebSocket connections. The ticket includes
     the client's IP address for additional security.
+    
+    Rate limited to prevent abuse: 10 tickets per minute per user.
     """
     # Verify the JWT token
     clean_token = token.removeprefix("Bearer ")
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+    
+    # Rate limiting check
+    current_time = time.time()
+    user_requests = ticket_rate_limit[user_claims.sub]
+    
+    # Remove old requests (older than 1 minute)
+    user_requests[:] = [req_time for req_time in user_requests if current_time - req_time < 60]
+    
+    # Check if user exceeded rate limit
+    if len(user_requests) >= TICKET_RATE_LIMIT_PER_MINUTE:
+        logger.warning(f"Rate limit exceeded for user {user_claims.sub}")
+        raise HTTPException(
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many ticket requests. Please wait before requesting another ticket."
+        )
+    
+    # Add current request timestamp
+    user_requests.append(current_time)
     
     # Get client IP address
     client_ip = request.client.host
