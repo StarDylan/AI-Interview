@@ -119,6 +119,14 @@ The frontend will be available at `https://localhost:5173` and the backend WebRT
 └── README.md                  # This file
 ```
 
+### Structurizr
+
+See an interactive diagram of the architecture:
+
+```
+docker run -it --rm -p 8080:8080 -v docs:/usr/local/structurizr structurizr/lite
+```
+
 ## Features
 
 - **Real-time Audio Processing:** WebRTC-based audio capture and streaming
