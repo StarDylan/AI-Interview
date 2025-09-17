@@ -25,12 +25,17 @@ interface IceCandidateMessage {
     };
 }
 
+export interface PingMessage {
+    type: "ping" | "pong";
+    timestamp: string;
+}
+
 export type SignalingMessage =
     | OfferMessage
     | AnswerMessage
     | IceCandidateMessage;
 
-export type Message = SignalingMessage;
+export type Message = SignalingMessage | PingMessage;
 
 export interface Envelope {
     message: Message;

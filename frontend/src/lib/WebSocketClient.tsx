@@ -3,19 +3,17 @@
  */
 
 import { useState } from "react";
-import {
-    useAuthenticatedWebSocket,
-    type WebSocketMessage,
-} from "./useAuthenticatedWebSocket";
+import { useAuthenticatedWebSocket } from "./useAuthenticatedWebSocket";
+import type { Message, PingMessage } from "./message";
 
 // Example component showing how to use the authenticated WebSocket
 export function WebSocketDemo() {
-    const [messages, setMessages] = useState<WebSocketMessage[]>([]);
+    const [messages, setMessages] = useState<Message[]>([]);
     const [connectionStatus, setConnectionStatus] = useState("disconnected");
 
     const { connect, disconnect, sendMessage, error, isConnected } =
         useAuthenticatedWebSocket({
-            onMessage: (message) => {
+            onMessage: (message: Message) => {
                 setMessages((prev) => [...prev, message]);
             },
             onConnectionChange: setConnectionStatus,
@@ -23,10 +21,9 @@ export function WebSocketDemo() {
 
     const handleTestMessage = () => {
         const testMessage = {
-            type: "test",
-            data: "Hello from authenticated client",
+            type: "ping",
             timestamp: new Date().toISOString(),
-        };
+        } as PingMessage;
 
         if (sendMessage(testMessage)) {
             console.log("Test message sent");

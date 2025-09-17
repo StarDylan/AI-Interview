@@ -1,21 +1,20 @@
 /**
  * WebSocket hook with ticket-based authentication support for the Interview Helper app.
- * 
+ *
  * This hook implements a secure two-step authentication process:
  * 1. First, it requests an authentication ticket from the backend using the user's JWT token
  * 2. Then, it uses the ticket to establish the WebSocket connection
- * 
+ *
  * This approach provides enhanced security by ensuring tickets are single-use and time-limited.
  */
 
 import { useAuth } from "react-oidc-context";
 import { useEffect, useState, useRef } from "react";
+import type { Envelope, Message } from "./message";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
-export type WebSocketMessage = any;
-
 interface WebSocketClientProps {
-    onMessage?: (message: WebSocketMessage) => void;
+    onMessage?: (message: Message) => void;
     onConnectionChange?: (status: string) => void;
 }
 
@@ -70,14 +69,25 @@ export function useAuthenticatedWebSocket({
             const ws = new WebSocket(`${wsUrl}/ws?ticket_id=${ticketId}`);
 
             ws.onopen = () => {
-                console.log("WebSocket connected with ticket-based authentication");
+                console.log(
+                    "WebSocket connected with ticket-based authentication",
+                );
                 setConnectionStatus("connected");
                 onConnectionChange?.("connected");
             };
 
             ws.onmessage = (event) => {
                 try {
-                    const message = JSON.parse(event.data);
+                    const envelope = JSON.parse(event.data) as Envelope;
+
+                    if (!envelope?.message?.type) {
+                        console.error("Invalid WebSocket message:", envelope);
+                        setError(
+                            "Received invalid message format from server!",
+                        );
+                        return;
+                    }
+                    const message = envelope.message;
                     onMessage?.(message);
                 } catch (e) {
                     console.error("Failed to parse WebSocket message:", e);
@@ -94,7 +104,9 @@ export function useAuthenticatedWebSocket({
                 onConnectionChange?.("disconnected");
 
                 if (event.code === 1008) {
-                    setError("Authentication failed - ticket invalid or expired");
+                    setError(
+                        "Authentication failed - ticket invalid or expired",
+                    );
                 } else if (event.code !== 1000) {
                     setError(
                         `Connection closed: ${event.reason || "Unknown error"}`,
@@ -112,7 +124,8 @@ export function useAuthenticatedWebSocket({
             wsRef.current = ws;
         } catch (err) {
             console.error("Failed to connect to WebSocket:", err);
-            const errorMessage = err instanceof Error ? err.message : "Unknown error";
+            const errorMessage =
+                err instanceof Error ? err.message : "Unknown error";
             setError(`Failed to connect: ${errorMessage}`);
             setConnectionStatus("disconnected");
             onConnectionChange?.("disconnected");
@@ -126,9 +139,10 @@ export function useAuthenticatedWebSocket({
         }
     };
 
-    const sendMessage = (message: WebSocketMessage) => {
+    const sendMessage = (message: Message) => {
         if (wsRef.current && connectionStatus === "connected") {
-            wsRef.current.send(JSON.stringify(message));
+            const envelope = { message } as Envelope;
+            wsRef.current.send(JSON.stringify(envelope));
             return true;
         }
         return false;

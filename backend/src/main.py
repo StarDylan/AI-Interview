@@ -1,4 +1,7 @@
 #!/usr/bin/env python3
+from interview_helper.context_manager.resource_keys import USER_IP
+from interview_helper.context_manager.resource_keys import USER_ID
+from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
 from typing import Dict
 from interview_helper.security.http import verify_jwt_token
@@ -13,7 +16,7 @@ import httpx
 import jwt
 import time
 from collections import defaultdict
-from typing import Dict, DefaultDict
+from typing import DefaultDict
 
 from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
@@ -123,58 +126,67 @@ async def health_check():
         "service": "Interview Helper Backend",
         "ticket_system": {
             "active_tickets": ticket_store.get_active_tickets_count(),
-            "default_expiration_seconds": 300
-        }
+            "default_expiration_seconds": 300,
+        },
     }
 
 
 @app.get("/auth/ticket", response_model=TicketResponse)
 async def generate_websocket_ticket(
-    request: Request, 
-    token: Annotated[str, Depends(oidc_scheme)]
+    request: Request, token: Annotated[str, Depends(oidc_scheme)]
 ):
     """
     Generate an authentication ticket for WebSocket connections.
-    
+
     This endpoint requires a valid JWT token and returns a single-use ticket
     that can be used to authenticate WebSocket connections. The ticket includes
     the client's IP address for additional security.
-    
+
     Rate limited to prevent abuse: 10 tickets per minute per user.
     """
     # Verify the JWT token
     clean_token = token.removeprefix("Bearer ")
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
-    
+
     # Rate limiting check
     current_time = time.time()
     user_requests = ticket_rate_limit[user_claims.sub]
-    
+
     # Remove old requests (older than 1 minute)
-    user_requests[:] = [req_time for req_time in user_requests if current_time - req_time < 60]
-    
+    user_requests[:] = [
+        req_time for req_time in user_requests if current_time - req_time < 60
+    ]
+
     # Check if user exceeded rate limit
     if len(user_requests) >= TICKET_RATE_LIMIT_PER_MINUTE:
         logger.warning(f"Rate limit exceeded for user {user_claims.sub}")
         raise HTTPException(
             status_code=status.HTTP_429_TOO_MANY_REQUESTS,
-            detail="Too many ticket requests. Please wait before requesting another ticket."
+            detail="Too many ticket requests. Please wait before requesting another ticket.",
         )
-    
+
     # Add current request timestamp
     user_requests.append(current_time)
-    
+
     # Get client IP address
+    if not request.client:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to determine client IP address",
+        )
+
     client_ip = request.client.host
-    
+
     # Generate the ticket
     ticket = ticket_store.generate_ticket(user_claims.sub, client_ip)
-    
-    logger.info(f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}")
-    
+
+    logger.info(
+        f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}"
+    )
+
     return TicketResponse(
         ticket_id=ticket.ticket_id,
-        expires_in=int(ticket.expires_at - ticket.created_at)
+        expires_in=int(ticket.expires_at - ticket.created_at),
     )
 
 
@@ -218,10 +230,10 @@ async def secured(token: Annotated[str, Depends(oidc_scheme)]):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, ticket_id: str = None):
+async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
     """
     WebSocket endpoint with ticket-based authentication.
-    
+
     Clients should first obtain a ticket from /auth/ticket and then pass it
     as a query parameter: /ws?ticket_id=<ticket_id>
     """
@@ -231,21 +243,29 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str = None):
         return
 
     # Get client IP address
+    if not websocket.client:
+        await websocket.close(code=1008, reason="Unable to determine client IP")
+        return
+
     client_ip = websocket.client.host
 
     try:
         # Validate the ticket
         ticket = ticket_store.validate_ticket(ticket_id, client_ip)
-        
+
         if not ticket:
-            await websocket.close(code=1008, reason="Invalid or expired authentication ticket")
+            await websocket.close(
+                code=1008, reason="Invalid or expired authentication ticket"
+            )
             return
-        
-        logger.info(f"WebSocket connection authenticated for user: {ticket.user_id} using ticket {ticket_id}")
-        
+
+        logger.info(
+            f"WebSocket connection authenticated for user: {ticket.user_id} using ticket {ticket_id}"
+        )
+
         # Clean up the used ticket
         ticket_store.cleanup_ticket(ticket_id)
-        
+
     except Exception as e:
         logger.warning(f"WebSocket ticket validation failed: {e}")
         await websocket.close(code=1008, reason="Authentication failed")
@@ -260,8 +280,10 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str = None):
         await context.register(WEBSOCKET, cws)
 
         # Store user information in the session context
-        await context.register("user_id", ticket.user_id)
-        await context.register("client_ip", ticket.client_ip)
+        await context.register(
+            USER_ID, ticket.user_id
+        )  # TODO: Replace with actual user ID from DB.
+        await context.register(USER_IP, ticket.client_ip)
 
         while True:
             try:
@@ -269,6 +291,8 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str = None):
 
                 if isinstance(message, WebRTCMessage):
                     await handle_webrtc_message(context, message)
+                elif isinstance(message, PingMessage):
+                    await cws.send_message(PingMessage())
                 # handle other message types...
             except Exception as e:
                 logger.error(f"WebSocket error for user {ticket.user_id}: {e}")
