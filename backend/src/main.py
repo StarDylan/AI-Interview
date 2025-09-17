@@ -1,16 +1,22 @@
 #!/usr/bin/env python3
-from starlette.responses import JSONResponse
-from fastapi.exceptions import HTTPException
+from interview_helper.context_manager.resource_keys import USER_IP
+from interview_helper.context_manager.resource_keys import USER_ID
+from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
 from typing import Dict
 from interview_helper.security.http import verify_jwt_token
+from interview_helper.security.tickets import ticket_store, TicketResponse
 from typing import Annotated
+from fastapi import Request
 from interview_helper.audio_stream_handler.audio_utils import (
     async_audio_write_to_disk_consumer_pair,
 )
 import logging
 import httpx
 import jwt
+import time
+from collections import defaultdict
+from typing import DefaultDict
 
 from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
@@ -22,7 +28,7 @@ from interview_helper.audio_stream_handler.audio_stream_handler import (
 )
 
 from fastapi.security import OpenIdConnect
-from fastapi import FastAPI, WebSocket, Depends, status
+from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
@@ -56,17 +62,18 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# TODO: Maybe redo with https://github.com/fastapi/fastapi/discussions/10175
-# TODO: Configure via ENV Vars
-ISSUER = "https://cognito-idp.us-east-1.amazonaws.com/us-east-1_WvxLx7BB1/"
-OIDC_CONFIG_URL = ISSUER.rstrip("/") + "/.well-known/openid-configuration"
-CLIENT_ID = "7i45dh6u7tt5lnpq3c8sjus39p"
-CLIENT_SECRET = "1os3k33evdio00scb6ts7m0r2nrss4q2se5n1jj0fpttedld8r2a"
-SITE_URL = "http://localhost:3000"
+# OIDC Configuration - configured via environment variables
+
+OIDC_CONFIG_URL = (
+    session_manager.get_settings().oidc_authority.rstrip("/")
+    + "/.well-known/openid-configuration"
+)
+CLIENT_ID = session_manager.get_settings().oidc_client_id
+SITE_URL = session_manager.get_settings().site_url
 REDIRECT_URI = f"{SITE_URL}/auth/callback"
 SCOPE = "openid profile email"
 
-FRONTEND_REDIRECT_URI = "http://localhost:3000/auth/callback"
+FRONTEND_REDIRECT_URI = session_manager.get_settings().frontend_redirect_uri
 
 oidc_config = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
 
@@ -76,6 +83,10 @@ AUTHORIZATION_ENDPOINT = oidc_config["authorization_endpoint"]
 TOKEN_ENDPOINT = oidc_config["token_endpoint"]
 
 oidc_scheme = OpenIdConnect(openIdConnectUrl=OIDC_CONFIG_URL)
+
+# Rate limiting for ticket generation (per user)
+ticket_rate_limit: DefaultDict[str, list] = defaultdict(list)
+TICKET_RATE_LIMIT_PER_MINUTE = 10
 
 
 @app.get("/")
@@ -105,68 +116,161 @@ async def login_redirect():
     return RedirectResponse(auth_url)
 
 
-@app.get("/auth/callback")
-async def auth_callback(code: str, state: str):
+@app.get("/health")
+async def health_check():
     """
-    This is the callback endpoint where the IdP redirects the user.
-    The backend exchanges the code for tokens and returns them to the frontend.
+    Health check endpoint that includes ticket system status.
     """
-    if state not in active_states or active_states[state][0] != "valid":
+    return {
+        "status": "healthy",
+        "service": "Interview Helper Backend",
+        "ticket_system": {
+            "active_tickets": ticket_store.get_active_tickets_count(),
+            "default_expiration_seconds": 300,
+        },
+    }
+
+
+@app.get("/auth/ticket", response_model=TicketResponse)
+async def generate_websocket_ticket(
+    request: Request, token: Annotated[str, Depends(oidc_scheme)]
+):
+    """
+    Generate an authentication ticket for WebSocket connections.
+
+    This endpoint requires a valid JWT token and returns a single-use ticket
+    that can be used to authenticate WebSocket connections. The ticket includes
+    the client's IP address for additional security.
+
+    Rate limited to prevent abuse: 10 tickets per minute per user.
+    """
+    # Verify the JWT token
+    clean_token = token.removeprefix("Bearer ")
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+
+    # Rate limiting check
+    current_time = time.time()
+    user_requests = ticket_rate_limit[user_claims.sub]
+
+    # Remove old requests (older than 1 minute)
+    user_requests[:] = [
+        req_time for req_time in user_requests if current_time - req_time < 60
+    ]
+
+    # Check if user exceeded rate limit
+    if len(user_requests) >= TICKET_RATE_LIMIT_PER_MINUTE:
+        logger.warning(f"Rate limit exceeded for user {user_claims.sub}")
         raise HTTPException(
-            status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid state parameter."
+            status_code=status.HTTP_429_TOO_MANY_REQUESTS,
+            detail="Too many ticket requests. Please wait before requesting another ticket.",
         )
-    del active_states[state]
 
-    # Exchange the authorization code for tokens (server-to-server)
-    async with httpx.AsyncClient() as client:
-        token_data = {
-            "grant_type": "authorization_code",
-            "code": code,
-            "redirect_uri": REDIRECT_URI,
-            "client_id": CLIENT_ID,
-            "client_secret": CLIENT_SECRET,
-        }
-        try:
-            response = await client.post(TOKEN_ENDPOINT, data=token_data)
-            response.raise_for_status()
-            tokens = response.json()
-        except httpx.HTTPStatusError as e:
-            raise HTTPException(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                detail=f"Failed to exchange code for tokens: {e.response.text}",
-            )
+    # Add current request timestamp
+    user_requests.append(current_time)
 
-    active_states[state] = ("tokens_received", tokens)
+    # Get client IP address
+    if not request.client:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Unable to determine client IP address",
+        )
 
-    # Step 6: Redirect the user back to the frontend with the state parameter
-    redirect_url = f"{FRONTEND_REDIRECT_URI}?state={state}"
-    return RedirectResponse(redirect_url)
-    # Return the tokens directly to the frontend.
-    # The frontend will now store these tokens and handle subsequent authentication.
-    return JSONResponse(
-        content={
-            "access_token": tokens.get("access_token"),
-            "id_token": tokens.get("id_token"),
-            "token_type": tokens.get("token_type"),
-            "expires_in": tokens.get("expires_in"),
-            "scope": tokens.get("scope"),
-            "refresh_token": tokens.get("refresh_token", None),  # Optional
-        }
+    client_ip = request.client.host
+
+    # Generate the ticket
+    ticket = ticket_store.generate_ticket(user_claims.sub, client_ip)
+
+    logger.info(
+        f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}"
     )
+
+    return TicketResponse(
+        ticket_id=ticket.ticket_id,
+        expires_in=int(ticket.expires_at - ticket.created_at),
+    )
+
+
+@app.get("/auth/token")
+async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
+    """
+    Get user information and return a clean token for WebSocket authentication.
+    This endpoint verifies the token and returns user claims.
+    """
+    clean_token = token.removeprefix("Bearer ")
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+
+    return {
+        "token": clean_token,
+        "user": {
+            "sub": user_claims.sub,
+            "name": user_claims.name,
+            "email": user_claims.email,
+            "picture": getattr(user_claims, "picture", None),
+        },
+        "expires_at": user_claims.exp,
+    }
 
 
 @app.get("/secured")
 async def secured(token: Annotated[str, Depends(oidc_scheme)]):
-    print(token)
-    verify_jwt_token(
+    """
+    Example secured endpoint that requires authentication.
+    """
+    user_claims = verify_jwt_token(
         token.removeprefix("Bearer "), jwks_client, CLIENT_ID, signing_algos
     )
-    return "Secured Endpoint"
+    return {
+        "message": "Access granted to secured endpoint",
+        "user": {
+            "sub": user_claims.sub,
+            "name": user_claims.name,
+            "email": user_claims.email,
+        },
+    }
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket):
-    # TODO: Authentication
+async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
+    """
+    WebSocket endpoint with ticket-based authentication.
+
+    Clients should first obtain a ticket from /auth/ticket and then pass it
+    as a query parameter: /ws?ticket_id=<ticket_id>
+    """
+    # Authenticate the WebSocket connection using ticket
+    if not ticket_id:
+        await websocket.close(code=1008, reason="Authentication ticket required")
+        return
+
+    # Get client IP address
+    if not websocket.client:
+        await websocket.close(code=1008, reason="Unable to determine client IP")
+        return
+
+    client_ip = websocket.client.host
+
+    try:
+        # Validate the ticket
+        ticket = ticket_store.validate_ticket(ticket_id, client_ip)
+
+        if not ticket:
+            await websocket.close(
+                code=1008, reason="Invalid or expired authentication ticket"
+            )
+            return
+
+        logger.info(
+            f"WebSocket connection authenticated for user: {ticket.user_id} using ticket {ticket_id}"
+        )
+
+        # Clean up the used ticket
+        ticket_store.cleanup_ticket(ticket_id)
+
+    except Exception as e:
+        logger.warning(f"WebSocket ticket validation failed: {e}")
+        await websocket.close(code=1008, reason="Authentication failed")
+        return
+
     await websocket.accept()
     context = await session_manager.new_session()
 
@@ -175,12 +279,24 @@ async def websocket_endpoint(websocket: WebSocket):
     async with cws:
         await context.register(WEBSOCKET, cws)
 
-        while True:
-            message = await cws.receive_message()
+        # Store user information in the session context
+        await context.register(
+            USER_ID, ticket.user_id
+        )  # TODO: Replace with actual user ID from DB.
+        await context.register(USER_IP, ticket.client_ip)
 
-            if isinstance(message, WebRTCMessage):
-                await handle_webrtc_message(context, message)
-            # handle other message types...
+        while True:
+            try:
+                message = await cws.receive_message()
+
+                if isinstance(message, WebRTCMessage):
+                    await handle_webrtc_message(context, message)
+                elif isinstance(message, PingMessage):
+                    await cws.send_message(PingMessage())
+                # handle other message types...
+            except Exception as e:
+                logger.error(f"WebSocket error for user {ticket.user_id}: {e}")
+                break
 
 
 if __name__ == "__main__":

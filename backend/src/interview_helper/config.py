@@ -17,6 +17,14 @@ class Settings(BaseSettings):
         default=[], alias="CORS_ALLOW_ORIGINS"
     )
 
+    # OIDC settings
+    oidc_authority: str = Field(alias="OIDC_AUTHORITY")
+    oidc_client_id: str = Field(alias="OIDC_CLIENT_ID")
+    site_url: str = Field(default="http://localhost:3000", alias="SITE_URL")
+    frontend_redirect_uri: str = Field(
+        default="http://localhost:5173/auth/callback", alias="FRONTEND_REDIRECT_URI"
+    )
+
     @field_validator("cors_allow_origins", mode="before")
     @classmethod
     def split_origins(cls, v):

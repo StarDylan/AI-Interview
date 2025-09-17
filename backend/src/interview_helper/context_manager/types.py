@@ -31,6 +31,7 @@ class ResourceKey(Generic[T]):
 UserId = NewType("UserId", ULID)
 SessionId = NewType("SessionId", ULID)
 ProjectId = NewType("ProjectId", ULID)
+UserIP = NewType("UserIP", str)
 
 
 @runtime_checkable
