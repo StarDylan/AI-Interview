@@ -1,13 +1,21 @@
 {
-  "version": "0.2.0",
-  "configurations": [
-    {
-      "name": "Backend Debugger",
-      "type": "debugpy",
-      "request": "launch",
-      "program": "${workspaceFolder}/backend/src/main.py",
-      "console": "integratedTerminal",
-      "cwd": "${workspaceFolder}/backend"
-    }
-  ]
+    "version": "0.2.0",
+    "configurations": [
+        {
+            "name": "Backend Debugger",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/backend/src/main.py",
+            "console": "integratedTerminal",
+            "cwd": "${workspaceFolder}/backend"
+        },
+        {
+            "name": "Debug Backend Tests",
+            "type": "debugpy",
+            "request": "launch",
+            "program": "${workspaceFolder}/backend/.venv/bin/pytest",
+            "console": "integratedTerminal",
+            "justMyCode": true
+        }
+    ]
 }
