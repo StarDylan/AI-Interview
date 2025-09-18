@@ -34,7 +34,7 @@ repos:
         name: Run pytest via uv
         entry: uv
         args: ["--directory=backend", "run", "pytest"]
-        language: node
+        language: system
         files: python
         pass_filenames: false
         stages: [pre-commit]
@@ -43,7 +43,7 @@ repos:
         name: Run pyrefly via uv
         entry: uv
         args: ["--directory=backend", "run", "pyrefly"]
-        language: node
+        language: system
         files: python
         pass_filenames: false
         stages: [pre-commit]
@@ -53,12 +53,12 @@ repos:
         name: Run Prettier via pnpm
         entry: pnpm
         args: ["--dir=frontend/", "run", "pretty-hook"]
-        language: node
+        language: system
         pass_filenames: false
         stages: [pre-commit]
 
       - id: eslint
-        language: node
+        language: system
         name: Run ESLint via pnpm
         entry: pnpm
         pass_filenames: false
