@@ -2,19 +2,18 @@
 Tests for the ticket-based authentication system.
 """
 
-import time
-from interview_helper.security.tickets import TicketStore, Ticket
+from interview_helper.security.tickets import TicketStore
 
 
 def test_ticket_generation():
     """Test basic ticket generation."""
     store = TicketStore(default_expiration_seconds=300)
-    
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
-    
+
     ticket = store.generate_ticket(user_id, client_ip)
-    
+
     assert ticket.user_id == user_id
     assert ticket.client_ip == client_ip
     assert not ticket.used
@@ -26,17 +25,17 @@ def test_ticket_generation():
 def test_ticket_validation_success():
     """Test successful ticket validation."""
     store = TicketStore(default_expiration_seconds=300)
-    
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
-    
+
     # Generate ticket
     ticket = store.generate_ticket(user_id, client_ip)
     ticket_id = ticket.ticket_id
-    
+
     # Validate ticket
     validated_ticket = store.validate_ticket(ticket_id, client_ip)
-    
+
     assert validated_ticket is not None
     assert validated_ticket.user_id == user_id
     assert validated_ticket.client_ip == client_ip
@@ -46,18 +45,18 @@ def test_ticket_validation_success():
 def test_ticket_single_use():
     """Test that tickets can only be used once."""
     store = TicketStore(default_expiration_seconds=300)
-    
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
-    
+
     # Generate ticket
     ticket = store.generate_ticket(user_id, client_ip)
     ticket_id = ticket.ticket_id
-    
+
     # First validation should succeed
     validated_ticket = store.validate_ticket(ticket_id, client_ip)
     assert validated_ticket is not None
-    
+
     # Second validation should fail (ticket already used)
     validated_ticket_2 = store.validate_ticket(ticket_id, client_ip)
     assert validated_ticket_2 is None
@@ -66,23 +65,23 @@ def test_ticket_single_use():
 def test_ticket_ip_validation():
     """Test that tickets validate client IP addresses."""
     store = TicketStore(default_expiration_seconds=300)
-    
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
     wrong_ip = "192.168.1.200"
-    
+
     # Generate ticket
     ticket = store.generate_ticket(user_id, client_ip)
     ticket_id = ticket.ticket_id
-    
+
     # Validation with correct IP should succeed
     validated_ticket = store.validate_ticket(ticket_id, client_ip)
     assert validated_ticket is not None
-    
+
     # Generate another ticket for wrong IP test
     ticket2 = store.generate_ticket(user_id, client_ip)
     ticket_id2 = ticket2.ticket_id
-    
+
     # Validation with wrong IP should fail
     validated_ticket_wrong = store.validate_ticket(ticket_id2, wrong_ip)
     assert validated_ticket_wrong is None
@@ -90,89 +89,69 @@ def test_ticket_ip_validation():
 
 def test_ticket_expiration():
     """Test that tickets expire correctly."""
-    # Create store with very short expiration (1 second)
-    store = TicketStore(default_expiration_seconds=1)
-    
+    store = TicketStore(default_expiration_seconds=100)
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
-    
+
     # Generate ticket
-    ticket = store.generate_ticket(user_id, client_ip)
+    ticket = store.generate_ticket(user_id, client_ip, current_time=0)
     ticket_id = ticket.ticket_id
-    
+
     # Should be valid immediately
-    assert ticket.is_valid()
-    
-    # Wait for expiration
-    time.sleep(2)
-    
+    assert ticket.is_valid(current_time=0)
+
+    # "Wait" for 100s
+
     # Should be expired
-    assert ticket.is_expired()
-    assert not ticket.is_valid()
-    
+    assert ticket.is_expired(current_time=100)
+    assert not ticket.is_valid(current_time=100)
+
     # Validation should fail
-    validated_ticket = store.validate_ticket(ticket_id, client_ip)
+    validated_ticket = store.validate_ticket(ticket_id, client_ip, current_time=100)
     assert validated_ticket is None
 
 
 def test_ticket_cleanup():
     """Test automatic cleanup of expired tickets."""
-    store = TicketStore(default_expiration_seconds=1)
-    
+    store = TicketStore(default_expiration_seconds=100)
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
-    
+
+    user_id2 = "test_user_456"
+    client_ip2 = "192.168.1.200"
+
     # Generate multiple tickets
-    ticket1 = store.generate_ticket(user_id, client_ip)
-    ticket2 = store.generate_ticket(user_id, client_ip)
-    
+    store.generate_ticket(user_id, client_ip, current_time=0)
+    store.generate_ticket(user_id2, client_ip2, current_time=0)
+
     # Should have 2 active tickets
-    assert store.get_active_tickets_count() == 2
-    
-    # Wait for expiration
-    time.sleep(2)
-    
+    assert store.get_active_tickets_count(current_time=0) == 2
+
+    # "Wait" for 100s
+
     # Generate new ticket (should trigger cleanup)
-    ticket3 = store.generate_ticket(user_id, client_ip)
-    
+    store.generate_ticket(user_id, client_ip, current_time=100)
+
     # Should only have 1 active ticket (the new one)
-    assert store.get_active_tickets_count() == 1
+    assert store.get_active_tickets_count(current_time=100) == 1
 
 
 def test_ticket_cleanup_method():
     """Test manual ticket cleanup."""
     store = TicketStore(default_expiration_seconds=300)
-    
+
     user_id = "test_user_123"
     client_ip = "192.168.1.100"
-    
-    # Generate ticket
+
+    # Generate new ticket for cleanup test
     ticket = store.generate_ticket(user_id, client_ip)
     ticket_id = ticket.ticket_id
-    
-    # Should be able to validate
-    validated_ticket = store.validate_ticket(ticket_id, client_ip)
-    assert validated_ticket is not None
-    
-    # Generate new ticket for cleanup test
-    ticket2 = store.generate_ticket(user_id, client_ip)
-    ticket_id2 = ticket2.ticket_id
-    
+
     # Manually cleanup the ticket
-    store.cleanup_ticket(ticket_id2)
-    
+    store.cleanup_ticket(ticket_id)
+
     # Should not be able to validate after cleanup
-    validated_ticket_2 = store.validate_ticket(ticket_id2, client_ip)
+    validated_ticket_2 = store.validate_ticket(ticket_id, client_ip)
     assert validated_ticket_2 is None
-
-
-if __name__ == "__main__":
-    # Run basic tests
-    test_ticket_generation()
-    test_ticket_validation_success()
-    test_ticket_single_use()
-    test_ticket_ip_validation()
-    test_ticket_expiration()
-    test_ticket_cleanup()
-    test_ticket_cleanup_method()
-    print("All ticket tests passed!")

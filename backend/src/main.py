@@ -5,7 +5,7 @@ from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
 from typing import Dict
 from interview_helper.security.http import verify_jwt_token
-from interview_helper.security.tickets import ticket_store, TicketResponse
+from interview_helper.security.tickets import TicketResponse
 from typing import Annotated
 from fastapi import Request
 from interview_helper.audio_stream_handler.audio_utils import (
@@ -42,7 +42,10 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 session_manager = AppContextManager(
-    (async_audio_write_to_disk_consumer_pair,), settings=Settings()
+    # Settings gets initialized from environment variables.
+    # type: ignore[arg-type]
+    (async_audio_write_to_disk_consumer_pair,),
+    settings=Settings(),
 )
 
 # Create FastAPI app
@@ -125,7 +128,7 @@ async def health_check():
         "status": "healthy",
         "service": "Interview Helper Backend",
         "ticket_system": {
-            "active_tickets": ticket_store.get_active_tickets_count(),
+            "active_tickets": session_manager.ticket_store.get_active_tickets_count(),
             "default_expiration_seconds": 300,
         },
     }
@@ -178,7 +181,7 @@ async def generate_websocket_ticket(
     client_ip = request.client.host
 
     # Generate the ticket
-    ticket = ticket_store.generate_ticket(user_claims.sub, client_ip)
+    ticket = session_manager.ticket_store.generate_ticket(user_claims.sub, client_ip)
 
     logger.info(
         f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}"
@@ -251,7 +254,7 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
 
     try:
         # Validate the ticket
-        ticket = ticket_store.validate_ticket(ticket_id, client_ip)
+        ticket = session_manager.ticket_store.validate_ticket(ticket_id, client_ip)
 
         if not ticket:
             await websocket.close(
@@ -264,7 +267,7 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
         )
 
         # Clean up the used ticket
-        ticket_store.cleanup_ticket(ticket_id)
+        session_manager.ticket_store.cleanup_ticket(ticket_id)
 
     except Exception as e:
         logger.warning(f"WebSocket ticket validation failed: {e}")

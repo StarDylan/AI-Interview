@@ -1,3 +1,4 @@
+from interview_helper.security.tickets import TicketStore
 from typing import Optional
 from collections import defaultdict
 from dataclasses import dataclass
@@ -103,6 +104,7 @@ class AppContextManager:
         # Static for duration of this context, doesn't require lock.
         self.audio_ingest_consumers = audio_ingest_consumers
         self.settings = settings
+        self.ticket_store = TicketStore()
 
     async def new_session(self) -> SessionContext:
         session_id = SessionId(ULID())
