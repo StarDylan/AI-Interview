@@ -129,7 +129,7 @@ async def health_check():
         "service": "Interview Helper Backend",
         "ticket_system": {
             "active_tickets": session_manager.ticket_store.get_active_tickets_count(),
-            "default_expiration_seconds": 300,
+            "default_expiration_seconds": session_manager.ticket_store._default_expiration,
         },
     }
 
