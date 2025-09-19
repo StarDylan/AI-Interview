@@ -53,11 +53,12 @@ just create-cert
 
 ### 2. Backend Setup
 
-Copy the .env.example to .env, then to install dependencies:
+Copy the .env.example to .env, then to install dependencies and setup the database:
 
 ```bash
 cd backend
 uv sync
+uv run alembic upgrade head
 ```
 
 ### 3. Frontend Setup
@@ -85,7 +86,7 @@ pre-commit install
 
 ```bash
 cd backend
-dotenvx run -- uv run .\src\main.py
+uv run ./src/main.py
 ```
 
 ### Start Frontend Development Server
