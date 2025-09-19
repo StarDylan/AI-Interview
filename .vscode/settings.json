@@ -12,6 +12,7 @@
     "**/*.pyc": true,
     "**/*.pyo": true,
     "**/*.pyd": true,
-    "**/.venv": true
+    "**/.venv": true,
+    "**/node_modules": true
   }
 }
