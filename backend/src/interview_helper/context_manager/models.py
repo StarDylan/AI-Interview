@@ -16,7 +16,7 @@ class User(Base):
     user_id: Mapped[str] = mapped_column(
         sa.String(26), primary_key=True, server_default=text("ulid()")
     )
-    username: Mapped[str] = mapped_column(sa.String(50), nullable=False, unique=True)
+    full_name: Mapped[str] = mapped_column(sa.String(100), nullable=False, unique=True)
     oidc_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, unique=True)
     updated_at: Mapped[DateTime] = mapped_column(
         sa.DateTime,
@@ -26,4 +26,4 @@ class User(Base):
     )
 
     def __repr__(self) -> str:
-        return f"User(user_id={self.user_id!r}, username={self.username!r})"
+        return f"User(user_id={self.user_id!r}, full_name={self.full_name!r})"
