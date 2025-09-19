@@ -1191,6 +1191,17 @@ wheels = [
 ]
 
 [[package]]
+name = "sqlite-ulid"
+version = "0.2.1"
+source = { registry = "https://pypi.org/simple" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/09/0f931ccc1127fbe6630e100cb4e4e819cf3f7dde25eb3c46461f261cd064/sqlite_ulid-0.2.1-py3-none-macosx_10_6_x86_64.whl", hash = "sha256:f5c95ba91bfdfe16f9cde2844c7f57fa970f2f80dda2378b4d3b45857646eef7", size = 252580 },
+    { url = "https://files.pythonhosted.org/packages/ba/b9/207a1b644f861034233572082717e5899bc827259572a75f9b8f6a389bcf/sqlite_ulid-0.2.1-py3-none-macosx_11_0_arm64.whl", hash = "sha256:a06768a6ce380c83668a40e6ddae285c903ee1f9a70f7ebc5479dbcdf75d3f21", size = 834754 },
+    { url = "https://files.pythonhosted.org/packages/3e/88/fc558250eaedbb90cf65b1471ef31f3854359cd0e7a3357a37545dd43bf8/sqlite_ulid-0.2.1-py3-none-manylinux_2_17_x86_64.manylinux2014_x86_64.manylinux1_x86_64.whl", hash = "sha256:0c1bd80b8043cf02e47d23a07dbf4254b96af770de8f3666d314c4e789ac11f6", size = 1104965 },
+    { url = "https://files.pythonhosted.org/packages/89/29/0dc43bcd1af313f0bf51f26916e15e218aef63b59c90a30debeffdd4ecf6/sqlite_ulid-0.2.1-py3-none-win_amd64.whl", hash = "sha256:0d8092fdf996b171cbf60d7d1121045dc77b26db2a5cc95ce69b7c22b5f62fdd", size = 2296438 },
+]
+
+[[package]]
 name = "srt"
 version = "3.5.3"
 source = { registry = "https://pypi.org/simple" }
@@ -1242,6 +1253,7 @@ dependencies = [
     { name = "scipy" },
     { name = "scipy-stubs" },
     { name = "sqlalchemy" },
+    { name = "sqlite-ulid" },
     { name = "streamz" },
     { name = "vosk" },
     { name = "websockets" },
@@ -1270,6 +1282,7 @@ requires-dist = [
     { name = "scipy", specifier = ">=1.16.0" },
     { name = "scipy-stubs", specifier = ">=1.16.1.0" },
     { name = "sqlalchemy", specifier = ">=2.0.43" },
+    { name = "sqlite-ulid", specifier = ">=0.2.1" },
     { name = "streamz", specifier = ">=0.6.4" },
     { name = "vosk", specifier = ">=0.3.45" },
     { name = "websockets", specifier = ">=15.0.1" },
