@@ -26,6 +26,7 @@ from interview_helper.context_manager.resource_keys import WEBSOCKET
 from interview_helper.audio_stream_handler.audio_stream_handler import (
     handle_webrtc_message,
 )
+from interview_helper.context_manager.database import get_or_add_user
 
 from fastapi.security import OpenIdConnect
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
@@ -181,7 +182,13 @@ async def generate_websocket_ticket(
     client_ip = request.client.host
 
     # Generate the ticket
-    ticket = session_manager.ticket_store.generate_ticket(user_claims.sub, client_ip)
+
+    # Get / Create user
+    db_user = get_or_add_user(
+        session_manager.db, user_claims.sub, user_claims.name or "User"
+    )
+
+    ticket = session_manager.ticket_store.generate_ticket(db_user.user_id, client_ip)
 
     logger.info(
         f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}"
@@ -263,7 +270,7 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
             return
 
         logger.info(
-            f"WebSocket connection authenticated for user: {ticket.user_id} using ticket {ticket_id}"
+            f"WebSocket connection authenticated for user: {str(ticket.user_id)[0:6]} using ticket {ticket_id}"
         )
 
         # Clean up the used ticket
@@ -283,9 +290,7 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
         await context.register(WEBSOCKET, cws)
 
         # Store user information in the session context
-        await context.register(
-            USER_ID, ticket.user_id
-        )  # TODO: Replace with actual user ID from DB.
+        await context.register(USER_ID, ticket.user_id)
         await context.register(USER_IP, ticket.client_ip)
 
         while True:

@@ -11,6 +11,7 @@ import time
 from typing import Dict, Optional
 from dataclasses import dataclass
 from pydantic import BaseModel
+from interview_helper.context_manager.types import UserId
 
 
 @dataclass
@@ -18,7 +19,7 @@ class Ticket:
     """Represents an authentication ticket for WebSocket connections."""
 
     ticket_id: str
-    user_id: str
+    user_id: UserId
     client_ip: str
     created_at: float
     expires_at: float
@@ -54,7 +55,7 @@ class TicketStore:
         self._default_expiration = default_expiration_seconds
 
     def generate_ticket(
-        self, user_id: str, client_ip: str, current_time: float = time.time()
+        self, user_id: UserId, client_ip: str, current_time: float = time.time()
     ) -> Ticket:
         """Generate a new authentication ticket."""
         ticket_id = secrets.token_urlsafe(32)

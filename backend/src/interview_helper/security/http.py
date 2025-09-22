@@ -47,7 +47,6 @@ class TokenClaims(BaseModel):
 def verify_jwt_token(
     token: str, jwks_client: jwt.PyJWKClient, client_id: str, signing_algos: str
 ) -> TokenClaims:
-    print(token)
     try:
         signing_key = jwks_client.get_signing_key_from_jwt(token).key
         payload = jwt.decode(
