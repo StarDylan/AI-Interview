@@ -4,8 +4,9 @@ from interview_helper.context_manager.resource_keys import USER_ID
 from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
 from typing import Dict
-from interview_helper.security.http import verify_jwt_token
+from interview_helper.security.http import verify_jwt_token, get_user_info_from_oidc_provider, get_oidc_userinfo_endpoint
 from interview_helper.security.tickets import TicketResponse
+from interview_helper.context_manager.types import UserId
 from typing import Annotated
 from fastapi import Request
 from interview_helper.audio_stream_handler.audio_utils import (
@@ -15,6 +16,7 @@ import logging
 import httpx
 import jwt
 import time
+import sqlalchemy as sa
 from collections import defaultdict
 from typing import DefaultDict
 
@@ -183,12 +185,36 @@ async def generate_websocket_ticket(
 
     # Generate the ticket
 
-    # Get / Create user
-    db_user = get_or_add_user(
-        session_manager.db, user_claims.sub, user_claims.name or "User"
-    )
-
-    ticket = session_manager.ticket_store.generate_ticket(db_user.user_id, client_ip)
+    # Get the user from the database using the token endpoint
+    # This is a temporary solution until we implement proper user lookup
+    try:
+        # Try to get the user from the database
+        with session_manager.db.begin() as conn:
+            result = conn.execute(
+                sa.text("SELECT user_id FROM users WHERE oidc_id = :oidc_id"),
+                {"oidc_id": user_claims.sub},
+            ).one_or_none()
+            
+            if result is not None:
+                # User exists, create a UserId from the string
+                user_id = UserId.from_str(result.user_id)
+            else:
+                # User doesn't exist yet, use a fallback
+                # In a real implementation, we would redirect to the token endpoint
+                # or create the user here
+                logger.warning(f"User {user_claims.sub} not found in database. Using fallback.")
+                raise ValueError("User not found")
+    except Exception as e:
+        # Fallback to using the token endpoint first
+        logger.warning(f"Error looking up user: {e}. Redirecting to /auth/token first.")
+        raise HTTPException(
+            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
+            detail="Please authenticate with /auth/token first",
+            headers={"Location": "/auth/token"}
+        )
+    
+    # Generate the ticket using the user ID
+    ticket = session_manager.ticket_store.generate_ticket(user_id, client_ip)
 
     logger.info(
         f"Generated WebSocket ticket {ticket.ticket_id} for user {user_claims.sub} from IP {client_ip}"
@@ -203,40 +229,127 @@ async def generate_websocket_ticket(
 @app.get("/auth/token")
 async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
     """
-    Get user information and return a clean token for WebSocket authentication.
-    This endpoint verifies the token and returns user claims.
+    Get user information, create the user in the database if needed, and return a clean token.
+    
+    This endpoint verifies the JWT token, then it fetches detailed user information
+    from the OIDC provider using the token and the userinfo endpoint from the
+    provider's well-known configuration.
+    
+    This endpoint must be called before requesting a ticket, as it ensures the user
+    exists in the database.
     """
     clean_token = token.removeprefix("Bearer ")
+    
+    # Verify the token first
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
-
-    return {
-        "token": clean_token,
-        "user": {
-            "sub": user_claims.sub,
-            "name": user_claims.name,
-            "email": user_claims.email,
-            "picture": getattr(user_claims, "picture", None),
-        },
-        "expires_at": user_claims.exp,
-    }
+    
+    try:
+        # Get the userinfo endpoint from the OIDC provider's configuration
+        userinfo_endpoint = await get_oidc_userinfo_endpoint(
+            session_manager.get_settings().oidc_authority
+        )
+        
+        # Get detailed user info from the OIDC provider
+        user_info = await get_user_info_from_oidc_provider(
+            clean_token,
+            userinfo_endpoint
+        )
+        
+        # Get / Create user in the database
+        user_name = user_info.name or user_claims.name or "User"
+        db_user = get_or_add_user(
+            session_manager.db, user_claims.sub, user_name
+        )
+        
+        # Return the combined information
+        return {
+            "token": clean_token,
+            "user": {
+                "sub": user_info.sub,
+                "name": user_info.name,
+                "email": user_info.email,
+                "picture": user_info.picture,
+                "given_name": user_info.given_name,
+                "family_name": user_info.family_name,
+                "username": user_info.username,
+                "custom_attributes": user_info.custom_attributes,
+                "db_user_id": str(db_user.user_id),  # Include the database user ID
+            },
+            "expires_at": user_claims.exp,
+        }
+    except Exception as e:
+        # Fallback to basic claims if OIDC user info fails
+        logger.warning(f"Failed to get OIDC user info: {e}. Using basic claims.")
+        
+        # Get / Create user in the database using basic claims
+        user_name = user_claims.name or "User"
+        db_user = get_or_add_user(
+            session_manager.db, user_claims.sub, user_name
+        )
+        
+        return {
+            "token": clean_token,
+            "user": {
+                "sub": user_claims.sub,
+                "name": user_claims.name,
+                "email": user_claims.email,
+                "picture": getattr(user_claims, "picture", None),
+                "db_user_id": str(db_user.user_id),  # Include the database user ID
+            },
+            "expires_at": user_claims.exp,
+        }
 
 
 @app.get("/secured")
 async def secured(token: Annotated[str, Depends(oidc_scheme)]):
     """
     Example secured endpoint that requires authentication.
+    
+    This endpoint demonstrates how to use the get_oidc_userinfo_endpoint and
+    get_user_info_from_oidc_provider functions to fetch detailed user information
+    from any OIDC provider.
     """
-    user_claims = verify_jwt_token(
-        token.removeprefix("Bearer "), jwks_client, CLIENT_ID, signing_algos
-    )
-    return {
-        "message": "Access granted to secured endpoint",
-        "user": {
-            "sub": user_claims.sub,
-            "name": user_claims.name,
-            "email": user_claims.email,
-        },
-    }
+    clean_token = token.removeprefix("Bearer ")
+    
+    # Verify the token first
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+    
+    try:
+        # Get the userinfo endpoint from the OIDC provider's configuration
+        userinfo_endpoint = await get_oidc_userinfo_endpoint(
+            session_manager.get_settings().oidc_authority
+        )
+        
+        # Get detailed user info from the OIDC provider
+        user_info = await get_user_info_from_oidc_provider(
+            clean_token,
+            userinfo_endpoint
+        )
+        
+        return {
+            "message": "Access granted to secured endpoint",
+            "user": {
+                "sub": user_info.sub,
+                "name": user_info.name,
+                "email": user_info.email,
+                "picture": user_info.picture,
+                "given_name": user_info.given_name,
+                "family_name": user_info.family_name,
+                "username": user_info.username,
+                "custom_attributes": user_info.custom_attributes,
+            },
+        }
+    except Exception as e:
+        # Fallback to basic claims if OIDC user info fails
+        logger.warning(f"Failed to get OIDC user info: {e}. Using basic claims.")
+        return {
+            "message": "Access granted to secured endpoint",
+            "user": {
+                "sub": user_claims.sub,
+                "name": user_claims.name,
+                "email": user_claims.email,
+            },
+        }
 
 
 @app.websocket("/ws")

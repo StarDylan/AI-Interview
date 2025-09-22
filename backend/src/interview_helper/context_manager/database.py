@@ -83,7 +83,6 @@ def get_user_by_id(db: PersistentDatabase, user_id: UserId) -> UserResult | None
         ).one_or_none()
 
         if result is not None:
-            print(result.user_id)
             return UserResult(
                 user_id=UserId.from_str(result.user_id),
                 full_name=result.full_name,
