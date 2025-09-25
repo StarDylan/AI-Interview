@@ -8,26 +8,40 @@
  * This approach provides enhanced security by ensuring tickets are single-use and time-limited.
  */
 
-import { useAuth } from "react-oidc-context";
 import { useEffect, useState, useRef } from "react";
 import type { Envelope, Message } from "./message";
+import { useAuth } from "react-oidc-context";
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-interface WebSocketClientProps {
-    onMessage?: (message: Message) => void;
-    onConnectionChange?: (status: string) => void;
-}
+type MessageType = Message["type"];
+type MessageMap = { [K in MessageType]: Extract<Message, { type: K }> };
 
-export function useAuthenticatedWebSocket({
-    onMessage,
-    onConnectionChange,
-}: WebSocketClientProps = {}) {
-    const auth = useAuth();
+export function useAuthenticatedWebSocket() {
     const [connectionStatus, setConnectionStatus] = useState<
         "disconnected" | "connecting" | "connected"
     >("disconnected");
+    const auth = useAuth();
     const [error, setError] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
+    // Handlers for specific message types
+    const messageHandlersRef = useRef<{
+        [K in MessageType]?: (msg: Message) => void;
+    }>({});
+
+    // Register a handler for a specific message type
+    function registerMessageHandler<K extends MessageType>(
+        type: K,
+        handler: (msg: MessageMap[K]) => void,
+    ) {
+        // Store as (msg: Message) => void, but allow type narrowing at registration
+        const wrappedHandler = handler as (msg: Message) => void;
+        if (!messageHandlersRef.current[type]) {
+            messageHandlersRef.current[type] = wrappedHandler;
+        } else {
+            throw Error(
+                `Trying to re-register message type ${type} in Websocket`,
+            );
+        }
+    }
 
     const connect = async () => {
         if (!auth.isAuthenticated || !auth.user?.access_token) {
@@ -38,7 +52,6 @@ export function useAuthenticatedWebSocket({
         try {
             setConnectionStatus("connecting");
             setError(null);
-            onConnectionChange?.("connecting");
 
             // Get backend URL from environment
             const backendUrl =
@@ -73,13 +86,11 @@ export function useAuthenticatedWebSocket({
                     "WebSocket connected with ticket-based authentication",
                 );
                 setConnectionStatus("connected");
-                onConnectionChange?.("connected");
             };
 
             ws.onmessage = (event) => {
                 try {
                     const envelope = JSON.parse(event.data) as Envelope;
-
                     if (!envelope?.message?.type) {
                         console.error("Invalid WebSocket message:", envelope);
                         setError(
@@ -88,7 +99,13 @@ export function useAuthenticatedWebSocket({
                         return;
                     }
                     const message = envelope.message;
-                    onMessage?.(message);
+
+                    // Call registered handlers for this type
+                    const handler =
+                        messageHandlersRef.current[message.type as MessageType];
+                    if (handler) {
+                        handler(message);
+                    }
                 } catch (e) {
                     console.error("Failed to parse WebSocket message:", e);
                 }
@@ -101,7 +118,6 @@ export function useAuthenticatedWebSocket({
                     event.reason,
                 );
                 setConnectionStatus("disconnected");
-                onConnectionChange?.("disconnected");
 
                 if (event.code === 1008) {
                     setError(
@@ -118,7 +134,6 @@ export function useAuthenticatedWebSocket({
                 console.error("WebSocket error:", event);
                 setError("WebSocket connection error");
                 setConnectionStatus("disconnected");
-                onConnectionChange?.("disconnected");
             };
 
             wsRef.current = ws;
@@ -128,7 +143,6 @@ export function useAuthenticatedWebSocket({
                 err instanceof Error ? err.message : "Unknown error";
             setError(`Failed to connect: ${errorMessage}`);
             setConnectionStatus("disconnected");
-            onConnectionChange?.("disconnected");
         }
     };
 
@@ -162,5 +176,6 @@ export function useAuthenticatedWebSocket({
         disconnect,
         sendMessage,
         isConnected: connectionStatus === "connected",
+        registerMessageHandler,
     };
 }

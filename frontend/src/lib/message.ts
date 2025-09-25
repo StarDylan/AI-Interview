@@ -2,6 +2,8 @@ export const MessageType = {
     OFFER: "offer",
     ANSWER: "answer",
     ICE_CANDIDATE: "ice_candidate",
+    PING: "ping",
+    PONG: "pong",
 } as const;
 
 interface OfferMessage {
@@ -26,7 +28,7 @@ interface IceCandidateMessage {
 }
 
 export interface PingMessage {
-    type: "ping" | "pong";
+    type: typeof MessageType.PING | typeof MessageType.PONG;
     timestamp: string;
 }
 

@@ -1,24 +1,56 @@
 import { Button, Paper } from "@mantine/core";
-import { useToggle } from "@mantine/hooks";
 import { IconMicrophone } from "@tabler/icons-react";
+import { createWebRTCClient } from "../lib/webrtc";
+import { useState } from "react";
+import { useWebSocket } from "../lib/useWebsocket";
 
 export function AudioSender() {
-    const [value, toggle] = useToggle(["audio_off", "audio_on"] as const);
+    type validConnectionStates =
+        | "disconnected"
+        | "connected"
+        | "connecting"
+        | "failed";
+    const [connectionState, setConnectionState] =
+        useState<validConnectionStates>("disconnected");
 
-    // TODO: Use authenticated websocket (or passed one in) and init a webrtc socket on start audio
+    const ws = useWebSocket();
+
+    const webrtc = createWebRTCClient({
+        sendMessage: ws.sendMessage,
+        onConnectionChange: setConnectionState,
+    });
+
+    for (const type of ["offer", "ice_candidate", "answer"] as const) {
+        ws.registerMessageHandler(type, webrtc.handleWebsocketSignaling);
+    }
+
+    function startSendingAudio() {
+        webrtc.startAudioStream();
+    }
+
+    function stopSendingAudio() {
+        webrtc.stopAudioStream();
+    }
 
     return (
         <Paper>
             <Button
-                variant={value === "audio_on" ? "filled" : "outline"}
-                color={value === "audio_on" ? "red" : undefined}
+                variant={connectionState === "connected" ? "filled" : "outline"}
+                color={connectionState === "connected" ? "red" : undefined}
                 leftSection={<IconMicrophone size={16} />}
                 size="md"
                 radius="lg"
-                onClick={() => toggle()}
+                loading={connectionState === "connecting"}
+                onClick={() => {
+                    if (connectionState === "disconnected") {
+                        startSendingAudio();
+                    } else if (connectionState === "connected") {
+                        stopSendingAudio();
+                    }
+                }}
             >
-                {value === "audio_off" && "Start Audio"}
-                {value === "audio_on" && "Stop Audio"}
+                {connectionState === "disconnected" && "Start Audio"}
+                {connectionState === "connected" && "Stop Audio"}
             </Button>
         </Paper>
     );

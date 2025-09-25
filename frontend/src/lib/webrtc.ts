@@ -30,7 +30,7 @@ export function createWebRTCClient({
     sendMessage,
 }: {
     onConnectionChange: (
-        state: "ready" | "connected" | "disconnected" | "failed" | "connecting",
+        state: "connected" | "disconnected" | "failed" | "connecting",
     ) => void;
     sendMessage: (message: Message) => void;
 }) {
