@@ -10,7 +10,7 @@ import {
     Menu,
 } from "@mantine/core";
 import { User } from "oidc-client-ts";
-import { WebSocketDemo } from "./lib/WebSocketClient";
+import { AudioSender } from "./components/AudioSender";
 
 interface AppLayoutProps {
     user?: User | null;
@@ -92,7 +92,7 @@ export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
                             The main content of your application goes here.
                         </p>
 
-                        <WebSocketDemo />
+                        <AudioSender />
 
                         <div style={{ marginTop: "2rem" }}>
                             <Button

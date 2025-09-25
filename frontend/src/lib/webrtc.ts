@@ -27,18 +27,22 @@ export class BadConfiguration extends Error {
 
 export function createWebRTCClient({
     onConnectionChange,
+    sendMessage,
 }: {
     onConnectionChange: (
         state: "ready" | "connected" | "disconnected" | "failed" | "connecting",
     ) => void;
+    sendMessage: (message: Message) => void;
 }) {
-    if (!SIGNALING_SERVER_URL) throw new Error("Invalid signaling URL");
-
     onConnectionChange("disconnected");
 
     let localStream: MediaStream, pc: RTCPeerConnection;
 
     async function handleWebsocketSignaling(msg: SignalingMessage) {
+        if (!pc) {
+            return;
+        }
+
         if (msg.type === "answer") {
             await pc.setRemoteDescription(
                 new RTCSessionDescription(msg.data.sdp),
@@ -48,53 +52,20 @@ export function createWebRTCClient({
         }
     }
 
-    // TODO: handle websocket over entire website.
-    let ws: WebSocket | null = initWebSocket(handleWebsocketSignaling);
-
-    ws.onopen = () => {
-        console.log("WebSocket connection established");
-        onConnectionChange("ready");
-    };
-
-    ws.onclose = (evt) => {
-        if (evt.code == 3001) {
-            console.log("ws closed");
-            ws = null;
-        } else {
-            ws = null;
-            console.warn("ws connection error");
-            console.warn(evt);
-        }
-        console.log("WebSocket connection closed");
-        onConnectionChange("disconnected");
-    };
-
-    ws.onerror = (error) => {
-        console.error("WebSocket error:", error);
-        onConnectionChange("failed");
-    };
-
     async function startAudioStream() {
-        if (!ws || ws.readyState !== WebSocket.OPEN) {
-            throw new Error("WebSocket connection not established");
-        }
-
         onConnectionChange("connecting");
         console.log("Starting audio stream...");
         pc = new RTCPeerConnection({ iceServers: ICE_SERVERS });
 
         pc.onicecandidate = (event) => {
-            if (event.candidate && ws) {
+            if (event.candidate) {
                 console.log("Sending ICE candidate:", event.candidate);
-                sendMessage(
-                    {
-                        type: "ice_candidate",
-                        data: {
-                            candidate: event.candidate,
-                        },
+                sendMessage({
+                    type: "ice_candidate",
+                    data: {
+                        candidate: event.candidate,
                     },
-                    ws,
-                );
+                });
             }
         };
 
@@ -102,7 +73,6 @@ export function createWebRTCClient({
             if (pc.connectionState === "connected") {
                 onConnectionChange("connected");
             } else if (pc.connectionState === "disconnected") {
-                // If disconnected, check if we should notify the user
                 onConnectionChange("disconnected");
             }
             if (pc.connectionState === "failed") {
@@ -119,10 +89,9 @@ export function createWebRTCClient({
         });
 
         console.log("Creating offer...");
-        if (!ws) {
-            throw new Error("WebSocket connection not established");
-        }
-        await createAndSendOffer(pc, ws);
+        await createAndSendOffer(pc, {
+            sendMessage,
+        });
         console.log("Offer sent, waiting for answer...");
     }
 
@@ -130,13 +99,12 @@ export function createWebRTCClient({
         onConnectionChange("disconnected");
         localStream?.getTracks().forEach((track) => track.stop());
 
-        // Close out all the connections
         if (pc) {
             pc.close();
         }
     }
 
-    return { startAudioStream, stopAudioStream };
+    return { startAudioStream, stopAudioStream, handleWebsocketSignaling };
 }
 
 /**
@@ -192,17 +160,17 @@ export function sendMessage(message: Message, ws: WebSocket) {
 /**
  * Create and send an offer
  */
-export async function createAndSendOffer(pc: RTCPeerConnection, ws: WebSocket) {
+export async function createAndSendOffer(
+    pc: RTCPeerConnection,
+    opts: { sendMessage: (message: Message) => void },
+) {
     if (!pc) throw new Error("PeerConnection not initialized");
     const offer = await pc.createOffer();
     await pc.setLocalDescription(offer);
-    sendMessage(
-        {
-            type: "offer",
-            data: {
-                sdp: pc.localDescription as RTCSessionDescriptionInit,
-            },
+    opts.sendMessage({
+        type: "offer",
+        data: {
+            sdp: pc.localDescription as RTCSessionDescriptionInit,
         },
-        ws,
-    );
+    });
 }
