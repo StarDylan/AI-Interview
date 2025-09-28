@@ -8,9 +8,13 @@ import {
     Burger,
     Button,
     Menu,
+    Tooltip,
 } from "@mantine/core";
 import { User } from "oidc-client-ts";
 import { AudioSender } from "./components/AudioSender";
+import { Ping } from "./components/Ping";
+import StatusDot from "./components/StatusDot";
+import { useWebSocket } from "./lib/useWebsocket";
 
 interface AppLayoutProps {
     user?: User | null;
@@ -25,6 +29,7 @@ const navItems = [
 
 export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
     const [activeTab, setActiveTab] = useState<string | null>("Home");
+    const ws = useWebSocket();
 
     // Extract user information from OIDC user object
     const userName =
@@ -57,6 +62,16 @@ export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
                         ))}
                     </Group>
                     <Group visibleFrom="sm" gap="xs">
+                        <Tooltip
+                            label="Server Connection Status"
+                            arrowOffset={50}
+                            arrowSize={8}
+                            withArrow
+                        >
+                            <span>
+                                <StatusDot status={ws.connectionStatus} />
+                            </span>
+                        </Tooltip>
                         <Text fw={500} size="sm">
                             {userName}
                         </Text>
@@ -93,6 +108,7 @@ export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
                         </p>
 
                         <AudioSender />
+                        <Ping />
 
                         <div style={{ marginTop: "2rem" }}>
                             <Button

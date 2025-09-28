@@ -43,6 +43,10 @@ export function useAuthenticatedWebSocket() {
         }
     }
 
+    function deregisterMessageHandler<K extends MessageType>(type: K) {
+        messageHandlersRef.current[type] = undefined;
+    }
+
     const connect = async () => {
         if (!auth.isAuthenticated || !auth.user?.access_token) {
             setError("User not authenticated");
@@ -162,12 +166,16 @@ export function useAuthenticatedWebSocket() {
         return false;
     };
 
-    // Clean up on unmount
+    // Connect on mount, disconnect on unmount
     useEffect(() => {
+        if (auth.isLoading) {
+            return; // Wait until we loaded auth
+        }
+        connect();
         return () => {
             disconnect();
         };
-    }, []);
+    }, [auth.isLoading]);
 
     return {
         connectionStatus,
@@ -177,5 +185,6 @@ export function useAuthenticatedWebSocket() {
         sendMessage,
         isConnected: connectionStatus === "connected",
         registerMessageHandler,
+        deregisterMessageHandler,
     };
 }
