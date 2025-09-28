@@ -19,6 +19,17 @@ export function useAuthenticatedWebSocket() {
     const [connectionStatus, setConnectionStatus] = useState<
         "disconnected" | "connecting" | "connected"
     >("disconnected");
+    const connectionStatusRef = useRef<
+        "disconnected" | "connecting" | "connected"
+    >("disconnected");
+
+    // Keep ref in sync with state
+    // This is for our functions that we define and that are captured.
+    // While also causing re-renders on change for parent components
+    useEffect(() => {
+        connectionStatusRef.current = connectionStatus;
+    }, [connectionStatus]);
+
     const auth = useAuth();
     const [error, setError] = useState<string | null>(null);
     const wsRef = useRef<WebSocket | null>(null);
@@ -158,7 +169,7 @@ export function useAuthenticatedWebSocket() {
     };
 
     const sendMessage = (message: Message) => {
-        if (wsRef.current && connectionStatus === "connected") {
+        if (wsRef.current && connectionStatusRef.current === "connected") {
             const envelope = { message } as Envelope;
             wsRef.current.send(JSON.stringify(envelope));
             return true;

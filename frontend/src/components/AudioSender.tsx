@@ -3,6 +3,7 @@ import { IconMicrophone } from "@tabler/icons-react";
 import { createWebRTCClient } from "../lib/webrtc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWebSocket } from "../lib/useWebsocket";
+import { MessageType } from "../lib/message";
 
 export function AudioSender() {
     type validConnectionStates =
@@ -37,12 +38,17 @@ export function AudioSender() {
             });
         }
     }, [ws.sendMessage, handleConnectionChange]);
+
     useEffect(() => {
         if (!webrtcClient.current) {
             return;
         }
 
-        const types = ["offer", "ice_candidate", "answer"] as const;
+        const types = [
+            MessageType.OFFER,
+            MessageType.ICE_CANDIDATE,
+            MessageType.ANSWER,
+        ] as const;
         for (const type of types) {
             ws.registerMessageHandler(
                 type,
@@ -79,6 +85,7 @@ export function AudioSender() {
                 size="md"
                 radius="lg"
                 loading={connectionState === "connecting"}
+                disabled={ws.connectionStatus != "connected"}
                 onClick={() => {
                     if (connectionState === "disconnected") {
                         startSendingAudio();
