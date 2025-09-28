@@ -4,7 +4,11 @@ from interview_helper.context_manager.resource_keys import USER_ID
 from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
 from typing import Dict
-from interview_helper.security.http import verify_jwt_token, get_user_info_from_oidc_provider, get_oidc_userinfo_endpoint
+from interview_helper.security.http import (
+    verify_jwt_token,
+    get_user_info_from_oidc_provider,
+    get_oidc_userinfo_endpoint,
+)
 from interview_helper.security.tickets import TicketResponse
 from interview_helper.context_manager.types import UserId
 from typing import Annotated
@@ -46,8 +50,8 @@ logger = logging.getLogger(__name__)
 
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
-    # type: ignore[arg-type]
     (async_audio_write_to_disk_consumer_pair,),
+    # type: ignore[arg-type]
     settings=Settings(),
 )
 
@@ -194,7 +198,7 @@ async def generate_websocket_ticket(
                 sa.text("SELECT user_id FROM users WHERE oidc_id = :oidc_id"),
                 {"oidc_id": user_claims.sub},
             ).one_or_none()
-            
+
             if result is not None:
                 # User exists, create a UserId from the string
                 user_id = UserId.from_str(result.user_id)
@@ -202,7 +206,9 @@ async def generate_websocket_ticket(
                 # User doesn't exist yet, use a fallback
                 # In a real implementation, we would redirect to the token endpoint
                 # or create the user here
-                logger.warning(f"User {user_claims.sub} not found in database. Using fallback.")
+                logger.warning(
+                    f"User {user_claims.sub} not found in database. Using fallback."
+                )
                 raise ValueError("User not found")
     except Exception as e:
         # Fallback to using the token endpoint first
@@ -210,9 +216,9 @@ async def generate_websocket_ticket(
         raise HTTPException(
             status_code=status.HTTP_307_TEMPORARY_REDIRECT,
             detail="Please authenticate with /auth/token first",
-            headers={"Location": "/auth/token"}
+            headers={"Location": "/auth/token"},
         )
-    
+
     # Generate the ticket using the user ID
     ticket = session_manager.ticket_store.generate_ticket(user_id, client_ip)
 
@@ -230,37 +236,34 @@ async def generate_websocket_ticket(
 async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
     """
     Get user information, create the user in the database if needed, and return a clean token.
-    
+
     This endpoint verifies the JWT token, then it fetches detailed user information
     from the OIDC provider using the token and the userinfo endpoint from the
     provider's well-known configuration.
-    
+
     This endpoint must be called before requesting a ticket, as it ensures the user
     exists in the database.
     """
     clean_token = token.removeprefix("Bearer ")
-    
+
     # Verify the token first
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
-    
+
     try:
         # Get the userinfo endpoint from the OIDC provider's configuration
         userinfo_endpoint = await get_oidc_userinfo_endpoint(
             session_manager.get_settings().oidc_authority
         )
-        
+
         # Get detailed user info from the OIDC provider
         user_info = await get_user_info_from_oidc_provider(
-            clean_token,
-            userinfo_endpoint
+            clean_token, userinfo_endpoint
         )
-        
+
         # Get / Create user in the database
         user_name = user_info.name or user_claims.name or "User"
-        db_user = get_or_add_user(
-            session_manager.db, user_claims.sub, user_name
-        )
-        
+        db_user = get_or_add_user(session_manager.db, user_claims.sub, user_name)
+
         # Return the combined information
         return {
             "token": clean_token,
@@ -280,13 +283,11 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
     except Exception as e:
         # Fallback to basic claims if OIDC user info fails
         logger.warning(f"Failed to get OIDC user info: {e}. Using basic claims.")
-        
+
         # Get / Create user in the database using basic claims
         user_name = user_claims.name or "User"
-        db_user = get_or_add_user(
-            session_manager.db, user_claims.sub, user_name
-        )
-        
+        db_user = get_or_add_user(session_manager.db, user_claims.sub, user_name)
+
         return {
             "token": clean_token,
             "user": {
@@ -304,28 +305,27 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
 async def secured(token: Annotated[str, Depends(oidc_scheme)]):
     """
     Example secured endpoint that requires authentication.
-    
+
     This endpoint demonstrates how to use the get_oidc_userinfo_endpoint and
     get_user_info_from_oidc_provider functions to fetch detailed user information
     from any OIDC provider.
     """
     clean_token = token.removeprefix("Bearer ")
-    
+
     # Verify the token first
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
-    
+
     try:
         # Get the userinfo endpoint from the OIDC provider's configuration
         userinfo_endpoint = await get_oidc_userinfo_endpoint(
             session_manager.get_settings().oidc_authority
         )
-        
+
         # Get detailed user info from the OIDC provider
         user_info = await get_user_info_from_oidc_provider(
-            clean_token,
-            userinfo_endpoint
+            clean_token, userinfo_endpoint
         )
-        
+
         return {
             "message": "Access granted to secured endpoint",
             "user": {

@@ -1,7 +1,5 @@
-"""
-Tests for the ticket-based authentication system.
-"""
-
+from ulid import ULID
+from interview_helper.context_manager.types import UserId
 from interview_helper.security.tickets import TicketStore
 
 
@@ -9,7 +7,7 @@ def test_ticket_generation():
     """Test basic ticket generation."""
     store = TicketStore(default_expiration_seconds=300)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
 
     ticket = store.generate_ticket(user_id, client_ip)
@@ -26,7 +24,7 @@ def test_ticket_validation_success():
     """Test successful ticket validation."""
     store = TicketStore(default_expiration_seconds=300)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
 
     # Generate ticket
@@ -46,7 +44,7 @@ def test_ticket_single_use():
     """Test that tickets can only be used once."""
     store = TicketStore(default_expiration_seconds=300)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
 
     # Generate ticket
@@ -66,7 +64,7 @@ def test_ticket_ip_validation():
     """Test that tickets validate client IP addresses."""
     store = TicketStore(default_expiration_seconds=300)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
     wrong_ip = "192.168.1.200"
 
@@ -91,7 +89,7 @@ def test_ticket_expiration():
     """Test that tickets expire correctly."""
     store = TicketStore(default_expiration_seconds=100)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
 
     # Generate ticket
@@ -116,10 +114,10 @@ def test_ticket_cleanup():
     """Test automatic cleanup of expired tickets."""
     store = TicketStore(default_expiration_seconds=100)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
 
-    user_id2 = "test_user_456"
+    user_id2 = UserId(ULID())
     client_ip2 = "192.168.1.200"
 
     # Generate multiple tickets
@@ -142,7 +140,7 @@ def test_ticket_cleanup_method():
     """Test manual ticket cleanup."""
     store = TicketStore(default_expiration_seconds=300)
 
-    user_id = "test_user_123"
+    user_id = UserId(ULID())
     client_ip = "192.168.1.100"
 
     # Generate new ticket for cleanup test
