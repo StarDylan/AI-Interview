@@ -10,9 +10,7 @@ from pydantic import BaseModel, Field
 class TranscriptionMessage(BaseModel):
     type: Literal["transcription"] = "transcription"
     timestamp: datetime = Field(default_factory=datetime.now)
-    session_id: str
     text: str
-    is_partial: bool = False
 
 
 class ErrorMessage(BaseModel):

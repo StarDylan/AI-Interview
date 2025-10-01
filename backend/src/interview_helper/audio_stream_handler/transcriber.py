@@ -9,7 +9,7 @@ async def close_transcriber(ctx: SessionContext):
     rec = await ctx.get(TRANSCRIBER_SESSION)
 
     if rec is not None:
-        accept_transcript(ctx, rec.FinalResult())
+        await accept_transcript(ctx, rec.FinalResult())
 
 
 async def transcribe_audio_consumer(ctx: SessionContext, audio_chunk: AudioChunk):
@@ -31,11 +31,18 @@ async def transcribe_audio_consumer(ctx: SessionContext, audio_chunk: AudioChunk
 
         if rec.AcceptWaveform(buf):
             # Finalized segment
-            accept_transcript(ctx, rec.Result())
+            await accept_transcript(ctx, rec.Result())
 
 
-def accept_transcript(ctx: SessionContext, data):
+async def accept_transcript(ctx: SessionContext, data):
     print(data)
+
+    # Send transcription data over websocket
+    # ws = await ctx.get_or_wait(WEBSOCKET)
+    # await ws.send_message(TranscriptionMessage(
+    #    type="transcription",
+    #    text="This is a transcription..."
+    # ))
 
 
 transcriber_consumer_pair = (
