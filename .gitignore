@@ -1,2 +1,5 @@
 # Where VSCode wants to put pytest coverage for backend
 .coverage
+
+# Idea files
+.idea/

@@ -12,9 +12,12 @@ def test_settings_from_environment():
         "SERVER_HOST": "127.0.0.1",
         "SERVER_PORT": "8000",
         "CORS_ALLOW_ORIGINS": "https://localhost:3000,https://example.com",
+        "OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com",
+        "OIDC_CLIENT_ID": "AWS-clientID",
     }
 
     with patch.dict("os.environ", env_vars, clear=True):
+        # type: ignore (we are testing environment)
         settings = Settings()
 
         assert settings.server_host == "127.0.0.1"
@@ -35,7 +38,11 @@ def test_cors_origins_list_string_parsing():
     origins_list = cast(list[str], f"{origin1},{origin2}")
 
     with patch.dict("os.environ", {}, clear=True):
-        settings = Settings(CORS_ALLOW_ORIGINS=origins_list)
+        settings = Settings(
+            CORS_ALLOW_ORIGINS=origins_list,
+            OIDC_AUTHORITY="test",
+            OIDC_CLIENT_ID="client_id",
+        )
         assert settings.cors_allow_origins == [origin1, origin2]
 
 
@@ -43,7 +50,7 @@ def test_empty_cors_origins_raises_error():
     """Test that empty CORS_ALLOW_ORIGINS raises ValueError"""
     with patch.dict("os.environ", {"CORS_ALLOW_ORIGINS": ""}, clear=True):
         with pytest.raises(ValueError, match="Missing.*CORS_ALLOW_ORIGINS"):
-            Settings()
+            Settings(OIDC_AUTHORITY="", OIDC_CLIENT_ID="")
 
 
 def test_split_origins_splits_comma_separated_string():
@@ -85,8 +92,15 @@ def test_split_origins_empty_string_results_in_empty_list():
 def test_settings_immutability():
     """Test that settings can't be modified"""
     with patch.dict(
-        "os.environ", {"CORS_ALLOW_ORIGINS": "https://localhost:3000"}, clear=True
+        "os.environ",
+        {
+            "CORS_ALLOW_ORIGINS": "https://localhost:3000",
+            "OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com",
+            "OIDC_CLIENT_ID": "AWS-clientID",
+        },
+        clear=True,
     ):
+        # type: ignore (using mocked environment)
         instance = Settings()
 
         with pytest.raises(ValidationError, match="frozen"):

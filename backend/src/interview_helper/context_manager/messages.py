@@ -3,6 +3,9 @@ from typing import Optional, Dict, Any, Literal, Annotated
 
 from pydantic import BaseModel, Field
 
+# WARNING: When adding new message types,
+# be sure that type is unique across all message types.
+
 
 class TranscriptionMessage(BaseModel):
     type: Literal["transcription"] = "transcription"
@@ -30,9 +33,14 @@ class WebRTCMessage(BaseModel):
     data: Dict[str, Any]
 
 
-WebSocketMessage: type[ErrorMessage | TranscriptionMessage | WebRTCMessage] = (
-    TranscriptionMessage | ErrorMessage | WebRTCMessage
-)
+class PingMessage(BaseModel):
+    type: Literal["ping"] | Literal["pong"] = "pong"
+    timestamp: datetime = Field(default_factory=datetime.now)
+
+
+WebSocketMessage: type[
+    ErrorMessage | TranscriptionMessage | WebRTCMessage | PingMessage
+] = TranscriptionMessage | ErrorMessage | WebRTCMessage | PingMessage
 
 
 class Envelope(BaseModel):

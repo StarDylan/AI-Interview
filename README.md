@@ -53,11 +53,12 @@ just create-cert
 
 ### 2. Backend Setup
 
-Copy the .env.example to .env, then to install dependencies:
+Copy the .env.example to .env, then to install dependencies and setup the database:
 
 ```bash
 cd backend
 uv sync
+uv run alembic upgrade head
 ```
 
 ### 3. Frontend Setup
@@ -85,7 +86,7 @@ pre-commit install
 
 ```bash
 cd backend
-dotenvx run -- uv run .\src\main.py
+uv run ./src/main.py
 ```
 
 ### Start Frontend Development Server
@@ -117,6 +118,14 @@ The frontend will be available at `https://localhost:5173` and the backend WebRT
 ├── cert/                      # SSL certificates
 ├── Justfile                   # Task runner commands
 └── README.md                  # This file
+```
+
+### Structurizr
+
+See an interactive diagram of the architecture:
+
+```
+docker run -it --rm -p 8080:8080 -v docs:/usr/local/structurizr structurizr/lite
 ```
 
 ## Features

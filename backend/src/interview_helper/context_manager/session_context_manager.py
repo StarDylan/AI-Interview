@@ -1,3 +1,4 @@
+from interview_helper.security.tickets import TicketStore
 from typing import Optional
 from collections import defaultdict
 from dataclasses import dataclass
@@ -15,6 +16,7 @@ from interview_helper.context_manager.types import (
     ResourceKey,
 )
 from interview_helper.audio_stream_handler.types import AudioChunk
+from interview_helper.context_manager.database import PersistentDatabase
 
 T = TypeVar("T", covariant=True)
 U = TypeVar("U", covariant=True)
@@ -103,6 +105,9 @@ class AppContextManager:
         # Static for duration of this context, doesn't require lock.
         self.audio_ingest_consumers = audio_ingest_consumers
         self.settings = settings
+        self.ticket_store = TicketStore()
+
+        self.db = PersistentDatabase()
 
     async def new_session(self) -> SessionContext:
         session_id = SessionId(ULID())

@@ -27,10 +27,21 @@ class ResourceKey(Generic[T]):
 #
 ## New Types
 #
+@dataclass
+class UserId:
+    _user_id: ULID
 
-UserId = NewType("UserId", ULID)
+    def __str__(self):
+        return str(self._user_id).lower()
+
+    @classmethod
+    def from_str(cls, user_id: str) -> "UserId":
+        return cls(_user_id=ULID.from_str(user_id.upper()))
+
+
 SessionId = NewType("SessionId", ULID)
 ProjectId = NewType("ProjectId", ULID)
+UserIP = NewType("UserIP", str)
 
 
 @runtime_checkable
