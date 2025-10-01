@@ -1,3 +1,4 @@
+from vosk import KaldiRecognizer
 from wave import Wave_write
 from aiortc.rtcpeerconnection import RTCPeerConnection
 
@@ -12,3 +13,4 @@ USER_IP = ResourceKey[str]("user_ip")
 
 WEBRTC_PEER_CONNECTION = ResourceKey[RTCPeerConnection]("webrtc")
 WAVE_WRITE_FD = ResourceKey[Wave_write]("wave_fd")
+TRANSCRIBER_SESSION = ResourceKey[KaldiRecognizer]("wave_fd")

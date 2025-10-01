@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.resource_keys import USER_IP
 from interview_helper.context_manager.resource_keys import USER_ID
 from interview_helper.context_manager.messages import PingMessage
@@ -50,7 +51,7 @@ logger = logging.getLogger(__name__)
 
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
-    (async_audio_write_to_disk_consumer_pair,),
+    (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
     # type: ignore[arg-type]
     settings=Settings(),
 )
