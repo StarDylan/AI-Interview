@@ -57,7 +57,7 @@ async def test_content_manager_can_wait():
     assert got["val"] == "hello2"
 
     # Ensure that the context is unregistered properly
-    await context_manager.unregister_all(ctx.session_id)
+    await context_manager.teardown_session(ctx.session_id)
 
     # Can't access session anymore! It is unregistered
     with pytest.raises(AssertionError):

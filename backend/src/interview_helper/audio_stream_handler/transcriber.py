@@ -19,7 +19,7 @@ async def transcribe_audio_consumer(ctx: SessionContext, audio_chunk: AudioChunk
     rec = await ctx.get(TRANSCRIBER_SESSION)
 
     if rec is None:
-        model = Model(ctx.get_settings().vosk_model_path)
+        model = Model(str(ctx.get_settings().vosk_model_path.absolute()))
         rec = KaldiRecognizer(model, audio_chunk.framerate)
         rec.SetWords(True)
         rec.SetPartialWords(True)
