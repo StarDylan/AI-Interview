@@ -19,11 +19,8 @@ backend = container "Backend" "Provides Interview Helper functionality." "Python
         description "Manages active WebSocket connections and basic user queries."
     }
     
-    audio_stream -> session_context "Sends audio data to"
-    audio_processor -> session_context "Sends extracted audio data (e.g., transcript) to "
-    analyzer -> session_context "Fetches session context during analysis from"
-    analyzer -> websocket_controller "Provides feedback for users to"
-    websocket_controller -> session_context "Fetches basic information from"
+    audio_processor -> analyzer "Provides transcription data to"
+    audio_stream -> audio_processor "Provides audio data to"
 }
 
 backend.websocket_controller -> spa "Receives interview feedback and any user actions" "WebSocket"
