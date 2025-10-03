@@ -18,19 +18,6 @@ logger = logging.getLogger(__name__)
 def to_pcm(
     frame: AudioFrame,
 ) -> AudioChunk:
-    """
-    Convert an av.AudioFrame or av.Packet to PCM NumPy array.
-
-    Args:
-        obj: Either an av.AudioFrame (decoded) or av.Packet (encoded audio).
-        target_rate: Desired sample rate (None = keep original).
-        target_layout: Channel layout ("mono", "stereo", etc.).
-        target_format: PCM format ("flt"=float32, "s16"=int16, etc.).
-
-    Returns:
-        np.ndarray with shape (samples, channels), PCM audio.
-    """
-
     chunks: list[PCMAudioArray] = []
 
     # Causes a robotic voice.

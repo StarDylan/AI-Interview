@@ -33,10 +33,9 @@ export interface PingMessage {
     timestamp: string;
 }
 
-interface TranscriptionMessage {
+export interface TranscriptionMessage {
     type: typeof MessageType.TRANSCRIPTION;
     timestamp: string;
-    session_id: string;
     text: string;
 }
 
