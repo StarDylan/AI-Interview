@@ -76,15 +76,12 @@ def to_mono_pcm16(chunk: AudioChunk) -> AudioChunk:
     # Convert each block to mono
     mono_blocks = []
     for b in blocks:
-        if chunk.number_of_channels == 1:
-            mono = b  # already mono: shape (n_samples,)
-        else:
-            # b is shape (n_samples, n_channels)
-            # But careful: mean of ints gives float; so do sum and divide
-            # We prefer to avoid overflow, so convert to a wider int (e.g. int32)
-            # Then back to int16
-            mono = b.astype(np.int32).sum(axis=1) // chunk.number_of_channels
-            mono = mono.astype(np.int16)
+        # b is shape (n_samples, n_channels)
+        # But careful: mean of ints gives float; so do sum and divide
+        # We prefer to avoid overflow, so convert to a wider int (e.g. int32)
+        # Then back to int16
+        mono = b.astype(np.int32).sum(axis=1) // chunk.number_of_channels
+        mono = mono.astype(np.int16)
         mono_blocks.append(mono)
 
     # Concatenate into one 1D array
