@@ -6,6 +6,7 @@ from ulid import ULID
 from typing import cast, TypeVar, Callable, Awaitable
 import anyio
 import anyio.abc
+import anyio.streams.memory
 import sys
 
 from interview_helper.config import Settings
@@ -23,6 +24,13 @@ U = TypeVar("U", covariant=True)
 
 type AsyncAudioConsumer = Callable[["SessionContext", "AudioChunk"], Awaitable[None]]
 type AsyncAudioConsumerFinalize = Callable[["SessionContext"], Awaitable[None]]
+type AsyncAiProcessor = Callable[["AIJob"], Awaitable[None]]
+
+
+@dataclass(frozen=True)
+class AIJob:
+    ctx: "SessionContext"
+    new_text: str
 
 
 @dataclass(frozen=True)
@@ -68,6 +76,10 @@ class SessionContext:
     async def teardown(self):
         await self.manager.teardown_session(self.session_id)
 
+    async def submit_ai_processing_job(self, new_text: str):
+        job = AIJob(ctx=self, new_text=new_text)
+        await self.manager.submit_ai_processing_job(job)
+
 
 # FIXME: Remove global project + user
 GLOBAL_PROJECT = ProjectId(ULID())
@@ -89,6 +101,7 @@ class AppContextManager:
         audio_ingest_consumers: tuple[
             tuple[AsyncAudioConsumer, AsyncAudioConsumerFinalize], ...
         ],
+        ai_processer: AsyncAiProcessor,
         settings: Settings | None = None,
     ):
         # We need to protect against race-conditions since our context might end up in an
@@ -120,6 +133,13 @@ class AppContextManager:
         self.ticket_store = TicketStore()
 
         self.db = PersistentDatabase()
+
+        # Background Serivces (e.g., to fetch AI results)
+        self._background_tg: anyio.abc.TaskGroup | None = None
+
+        self._job_send: anyio.streams.memory.ObjectSendStream | None = None
+        self._job_recv: anyio.streams.memory.ObjectReceiveStream | None = None
+        self._workers_started = False
 
     async def new_session(self, user_id: UserId) -> SessionContext:
         session_id = SessionId(ULID())
@@ -255,3 +275,72 @@ class AppContextManager:
         ctx = SessionContext(self, session_id)
         for consumer, _ in self.audio_ingest_consumers:
             await consumer(ctx, audio_chunk)
+
+    async def submit_ai_processing_job(self, job: AIJob):
+        assert self._workers_started
+        assert self._job_send is not None
+
+        await self._job_send.send(job)
+
+    async def start_background_services(self, max_buffer_size=5) -> None:
+        """
+        Creates a global TaskGroup + job queue + worker pool.
+        Call this once on app startup (FastAPI lifespan).
+        """
+        if self._background_tg is not None:
+            return  # already started
+
+        # Long-lived service TG
+        self._background_tg = await anyio.create_task_group().__aenter__()
+
+        job_send, job_recv = anyio.create_memory_object_stream[AIJob](
+            max_buffer_size=max_buffer_size
+        )
+        self._job_send = job_send
+        self._job_recv = job_recv
+
+        # Spawn workers inside service TG
+        for i in range(4):
+            self._background_tg.start_soon(
+                self._worker, f"bg-w{i}", self._job_recv.clone()
+            )
+
+        self._workers_started = True
+
+    async def _worker(
+        self, name: str, recv: anyio.abc.ObjectReceiveStream[AIJob]
+    ) -> None:
+        async with recv:
+            async for job in recv:
+                try:
+                    await self._process_job(job, worker_name=name)
+                except Exception:
+                    # Never let an exception kill the worker or the service TG
+                    import logging
+
+                    logging.getLogger(__name__).exception(
+                        "background worker %s failed processing job: %r", name, job
+                    )
+
+    async def _process_job(self, job: AIJob, *, worker_name: str) -> None:
+        # TODO: Do some AI processing here
+        print(f"Processing text: {job.new_text}")
+
+    async def stop_background_services(self) -> None:
+        """
+        Gracefully drains and shuts down the background service.
+        """
+        if self._background_tg is None:
+            return
+
+        # Close send end so workers finish when queue drains
+        if self._job_send is not None:
+            await self._job_send.aclose()
+
+        # Exit task group (this will wait for workers to exit)
+        await self._background_tg.__aexit__(None, None, None)
+
+        # Clear handles
+        self._background_tg = None
+        self._job_send = None
+        self._job_recv = None

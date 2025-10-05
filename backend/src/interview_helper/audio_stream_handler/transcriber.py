@@ -52,6 +52,8 @@ async def accept_transcript(ctx: SessionContext, data, ws: ConcurrentWebSocket):
     # Send transcription data over websocket
     await ws.send_message(TranscriptionMessage(type="transcription", text=text))
 
+    await ctx.submit_ai_processing_job(text)
+
 
 transcriber_consumer_pair = (
     vosk_transcribe_audio_consumer,

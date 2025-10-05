@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from interview_helper.ai_analysis.ai_analysis import fake_ai_analyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.messages import PingMessage
@@ -51,6 +52,7 @@ logger = logging.getLogger(__name__)
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
     (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
+    ai_processer=fake_ai_analyzer,
     # type: ignore[arg-type]
     settings=Settings(),
 )
