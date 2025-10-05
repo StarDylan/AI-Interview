@@ -178,6 +178,7 @@ export function useAuthenticatedWebSocket() {
     };
 
     // Connect on mount, disconnect on unmount
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (auth.isLoading) {
             return; // Wait until we loaded auth
@@ -186,7 +187,7 @@ export function useAuthenticatedWebSocket() {
         return () => {
             disconnect();
         };
-    }, [connect, auth.isLoading]);
+    }, [auth.isLoading]);
 
     return {
         connectionStatus,
