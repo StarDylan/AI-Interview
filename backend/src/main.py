@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+from contextlib import asynccontextmanager
 from interview_helper.ai_analysis.ai_analysis import fake_ai_analyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
@@ -57,11 +58,21 @@ session_manager = AppContextManager(
     settings=Settings(),
 )
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """background task starts at statrup"""
+    await session_manager.start_background_services()
+    yield
+    await session_manager.stop_background_services()
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Modular WebRTC Transcription Server",
     description="A refactored FastAPI-based WebRTC server with functional, modular architecture",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(
