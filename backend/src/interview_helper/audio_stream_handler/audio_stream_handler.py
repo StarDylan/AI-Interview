@@ -1,6 +1,3 @@
-from interview_helper.audio_stream_handler.audio_utils import (
-    close_write_to_disk_audio_consumer,
-)
 from aiortc.mediastreams import MediaStreamError
 from interview_helper.audio_stream_handler.types import AudioChunk
 from interview_helper.audio_stream_handler.types import PCMAudioArray
@@ -115,6 +112,8 @@ async def audio_processing_task(track: MediaStreamTrack, ctx: SessionContext):
 
     processed_audio_buffer: list[PCMAudioArray] = []
 
+    await ctx.manager.set_active_audio_session(ctx.session_id)
+
     try:
         while True:
             frame = await track.recv()
@@ -149,16 +148,22 @@ async def audio_processing_task(track: MediaStreamTrack, ctx: SessionContext):
                 )
             )
 
-        await finalize_session(ctx)
+        await finalize_audio_stream(ctx)
 
 
-async def finalize_session(ctx: SessionContext):
+async def finalize_audio_stream(ctx: SessionContext):
     """Finalize the session"""
+
+    if not ctx.is_active():
+        return  # Session was closed, so we can't finish handling audio
 
     peer_connection = await ctx.get_or_wait(WEBRTC_PEER_CONNECTION)
     await peer_connection.close()
 
-    await close_write_to_disk_audio_consumer(ctx)
+    for _, finalizer in ctx.manager.audio_ingest_consumers:
+        await finalizer(ctx)
+
+    await ctx.manager.clear_active_audio_session(ctx.session_id)
 
 
 def parse_candidate(candidate_str: str) -> Optional[ICECandidate]:

@@ -186,7 +186,7 @@ export function useAuthenticatedWebSocket() {
         return () => {
             disconnect();
         };
-    }, [auth.isLoading]);
+    }, [connect, auth.isLoading]);
 
     return {
         connectionStatus,

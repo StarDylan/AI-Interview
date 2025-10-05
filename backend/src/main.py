@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
-from interview_helper.context_manager.resource_keys import USER_IP
-from interview_helper.context_manager.resource_keys import USER_ID
+from starlette.websockets import WebSocketDisconnect
+from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
 from typing import Dict
@@ -50,7 +50,7 @@ logger = logging.getLogger(__name__)
 
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
-    (async_audio_write_to_disk_consumer_pair,),
+    (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
     # type: ignore[arg-type]
     settings=Settings(),
 )
@@ -395,19 +395,16 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
         return
 
     await websocket.accept()
-    context = await session_manager.new_session()
+    context = await session_manager.new_session(user_id=ticket.user_id)
+    print(f"Opened new session {context.session_id} for user {ticket.user_id}")
 
     cws = ConcurrentWebSocket(already_accepted_ws=websocket)
 
-    async with cws:
-        await context.register(WEBSOCKET, cws)
+    try:
+        async with cws:
+            await context.register(WEBSOCKET, cws)
 
-        # Store user information in the session context
-        await context.register(USER_ID, ticket.user_id)
-        await context.register(USER_IP, ticket.client_ip)
-
-        while True:
-            try:
+            while True:
                 message = await cws.receive_message()
 
                 if isinstance(message, WebRTCMessage):
@@ -415,9 +412,9 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
                 elif isinstance(message, PingMessage):
                     await cws.send_message(PingMessage())
                 # handle other message types...
-            except Exception as e:
-                logger.error(f"WebSocket error for user {ticket.user_id}: {e}")
-                break
+    except WebSocketDisconnect:
+        await context.teardown()
+        print(f"Closed session {context.session_id} for {ticket.user_id}")
 
 
 if __name__ == "__main__":

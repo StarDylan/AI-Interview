@@ -20,7 +20,7 @@ async def test_send_and_receive_message():
         # Try to start it again to show no issues
         await cws.start()
 
-        msg = TranscriptionMessage(session_id="sess1", text="hello world")
+        msg = TranscriptionMessage(text="hello world")
         await cws.send_message(msg)
         await wait_all_tasks_blocked()  # Let writer run
 

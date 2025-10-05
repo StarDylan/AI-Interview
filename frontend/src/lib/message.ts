@@ -4,6 +4,7 @@ export const MessageType = {
     ICE_CANDIDATE: "ice_candidate",
     PING: "ping",
     PONG: "pong",
+    TRANSCRIPTION: "transcription",
 } as const;
 
 interface OfferMessage {
@@ -32,12 +33,18 @@ export interface PingMessage {
     timestamp: string;
 }
 
+export interface TranscriptionMessage {
+    type: typeof MessageType.TRANSCRIPTION;
+    timestamp: string;
+    text: string;
+}
+
 export type SignalingMessage =
     | OfferMessage
     | AnswerMessage
     | IceCandidateMessage;
 
-export type Message = SignalingMessage | PingMessage;
+export type Message = SignalingMessage | PingMessage | TranscriptionMessage;
 
 export interface Envelope {
     message: Message;

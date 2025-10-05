@@ -1,3 +1,5 @@
+from ulid import ULID
+from interview_helper.context_manager.types import UserId
 import pytest
 import anyio
 
@@ -12,7 +14,7 @@ async def test_context_manager_maintains_individual_state():
     contextManager1 = AppContextManager(())
     contextManager2 = AppContextManager(())
 
-    ctx = await contextManager1.new_session()
+    ctx = await contextManager1.new_session(UserId(ULID()))
 
     with pytest.raises(AssertionError):
         # Not a valid context for contextManager2
@@ -27,7 +29,7 @@ async def test_content_manager_can_wait():
     test_resource_key1 = ResourceKey[str]("string")
     test_resource_key2 = ResourceKey[str]("string2")
     context_manager = AppContextManager(())
-    ctx = await context_manager.new_session()
+    ctx = await context_manager.new_session(UserId(ULID()))
 
     got = {}
 
@@ -57,7 +59,7 @@ async def test_content_manager_can_wait():
     assert got["val"] == "hello2"
 
     # Ensure that the context is unregistered properly
-    await context_manager.unregister_all(ctx.session_id)
+    await context_manager.teardown_session(ctx.session_id)
 
     # Can't access session anymore! It is unregistered
     with pytest.raises(AssertionError):
@@ -67,7 +69,7 @@ async def test_content_manager_can_wait():
 async def test_content_manager_basic_can_wait():
     test_resource_key1 = ResourceKey[str]("string")
     context_manager = AppContextManager(())
-    ctx = await context_manager.new_session()
+    ctx = await context_manager.new_session(UserId(ULID()))
 
     # Test basic get_and_wait
     await ctx.register(test_resource_key1, "hello1")

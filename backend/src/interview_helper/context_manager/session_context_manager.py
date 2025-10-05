@@ -57,10 +57,16 @@ class SessionContext:
     def get_settings(self) -> Settings:
         return self.manager.get_settings()
 
+    def is_active(self) -> bool:
+        return self.session_id in self.manager.active_sessions
+
     async def ingest_audio(self, audio_chunk: AudioChunk):
         await self.manager.ingest_audio(
             session_id=self.session_id, audio_chunk=audio_chunk
         )
+
+    async def teardown(self):
+        await self.manager.teardown_session(self.session_id)
 
 
 # FIXME: Remove global project + user
@@ -102,6 +108,12 @@ class AppContextManager:
 
         self.session_task_group: dict[SessionId, anyio.abc.TaskGroup] = {}
 
+        # Track active audio sessions
+        self.active_audio_sessions: set[SessionId] = set()
+        self.cleanup_waiting_event: dict[SessionId, anyio.Event] = defaultdict(
+            anyio.Event
+        )
+
         # Static for duration of this context, doesn't require lock.
         self.audio_ingest_consumers = audio_ingest_consumers
         self.settings = settings
@@ -109,13 +121,13 @@ class AppContextManager:
 
         self.db = PersistentDatabase()
 
-    async def new_session(self) -> SessionContext:
+    async def new_session(self, user_id: UserId) -> SessionContext:
         session_id = SessionId(ULID())
 
         async with self.lock:
-            # FIXME: Right now we treat every user as the same user on the same project.
+            # FIXME: Right now we treat every user on the same project.
             self.session_data[session_id] = AppContextManager.SessionData(
-                project=GLOBAL_PROJECT, user=GLOBAL_USER
+                project=GLOBAL_PROJECT, user=user_id
             )
 
             self.session_task_group[
@@ -185,13 +197,41 @@ class AppContextManager:
         async with self.lock:
             return cast(T, self.store[(key, session_id)])
 
-    async def unregister_all(self, session_id: SessionId) -> None:
-        """Teardown all resources for a session"""
+    async def set_active_audio_session(self, session_id: SessionId):
+        async with self.lock:
+            self.active_audio_sessions.add(session_id)
+
+    async def clear_active_audio_session(self, session_id: SessionId):
+        event = None
+
+        async with self.lock:
+            self.active_audio_sessions.remove(session_id)
+
+            if session_id in self.cleanup_waiting_event:
+                event = self.cleanup_waiting_event[session_id]
+
+        if event is not None:
+            event.set()
+
+    async def teardown_session(self, session_id: SessionId) -> None:
+        """Teardown all resources for a websocket session"""
+
+        # Wait for any finishing audio handlers
+        event = None
+        async with self.lock:
+            if session_id in self.active_audio_sessions:
+                event = self.cleanup_waiting_event[session_id]
+
+        if event is not None:
+            await event.wait()
+
         async with self.lock:
             for k in self.store_keys[session_id]:
                 del self.store[k]
 
                 if k in self.waiting_events:
+                    # Notify any waiting events that session is done
+                    self.waiting_events[k].set()
                     del self.waiting_events[k]
 
             del self.store_keys[session_id]
@@ -199,6 +239,11 @@ class AppContextManager:
             del self.session_data[session_id]
 
             self.active_sessions.remove(session_id)
+
+            # Remove from active audio sessions and notify
+            if session_id in self.active_audio_sessions:
+                self.active_audio_sessions.remove(session_id)
+                # Optionally notify any listeners here if needed
 
             task_group = self.session_task_group[session_id]
 

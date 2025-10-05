@@ -36,6 +36,10 @@ workspace "Thesis V2" {
             fs = container "File System" {
                 tags "Filesystem"
             }
+
+            whisper = container "Whisper Transcriber" {
+                description "Transcribes audio using the SOTA Whisper model"
+            }
             
             !include backend.dsl
         }
@@ -44,6 +48,7 @@ workspace "Thesis V2" {
         website_relation = u -> ss.webapp "Visits Interview Helper using" "HTTPS"
 
         ss.backend.analyzer -> ai "Sends queries to" "OpenAI Compliant API"
+        ss.backend.audio_processor -> ss.whisper "Sends audio to" "Websocket"
     }
 
     views {
