@@ -217,6 +217,7 @@ class AppContextManager:
         """Teardown all resources for a websocket session"""
 
         # Wait for any finishing audio handlers
+        event = None
         async with self.lock:
             if session_id in self.active_audio_sessions:
                 event = self.cleanup_waiting_event[session_id]
