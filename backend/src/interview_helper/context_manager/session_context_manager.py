@@ -80,6 +80,9 @@ class SessionContext:
         job = AIJob(ctx=self, new_text=new_text)
         await self.manager.submit_ai_processing_job(job)
 
+    def get_user_id(self):
+        return self.manager.session_data[self.session_id].user
+
 
 # FIXME: Remove global project + user
 GLOBAL_PROJECT = ProjectId(ULID())
