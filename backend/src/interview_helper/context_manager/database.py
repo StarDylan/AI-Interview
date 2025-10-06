@@ -141,7 +141,11 @@ def add_transcription(
             sa.insert(models.Transcription).returning(
                 models.Transcription.transcription_id
             ),
-            {"user_id": user_id, "session_id": session_id, "text_output": text},
+            {
+                "user_id": str(user_id),
+                "session_id": str(session_id),
+                "text_output": text,
+            },
         )
 
     assert result, (

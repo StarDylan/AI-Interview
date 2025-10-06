@@ -16,7 +16,9 @@ async def vosk_close_transcriber(ctx: SessionContext):
     ws = await ctx.get_or_wait(WEBSOCKET)
 
     if rec is not None:
-        await accept_transcript(ctx, rec.FinalResult(), ws)
+        text = json.loads(rec.FinalResult())["text"]
+        if text:
+            await accept_transcript(ctx, text, ws)
 
 
 async def vosk_transcribe_audio_consumer(ctx: SessionContext, audio_chunk: AudioChunk):
@@ -44,12 +46,12 @@ async def vosk_transcribe_audio_consumer(ctx: SessionContext, audio_chunk: Audio
 
         if rec.AcceptWaveform(buf):
             # Finalized segment
-            await accept_transcript(ctx, json.loads(rec.Result()), ws)
+            text = json.loads(rec.Result())["text"]
+            if text:
+                await accept_transcript(ctx, text, ws)
 
 
-async def accept_transcript(ctx: SessionContext, data, ws: ConcurrentWebSocket):
-    text = data["text"]
-
+async def accept_transcript(ctx: SessionContext, text: str, ws: ConcurrentWebSocket):
     # Send transcription data over websocket
     await ws.send_message(TranscriptionMessage(type="transcription", text=text))
 

@@ -77,4 +77,7 @@ def write_pcmaudio_to_wav(audio_chunk: AudioChunk, open_wave_fd: Wave_write):
 
     full_frame = np.concatenate(audio_chunk.data, axis=0)
 
-    open_wave_fd.writeframes(full_frame.tobytes())
+    try:
+        open_wave_fd.writeframes(full_frame.tobytes())
+    except AttributeError:
+        pass  # Expected when closing the file, this is OK as we don't care about the last little bit.
