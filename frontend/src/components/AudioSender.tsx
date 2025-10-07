@@ -22,7 +22,11 @@ import {
 import { createWebRTCClient } from "../lib/webrtc";
 import { useCallback, useEffect, useRef, useState } from "react";
 import { useWebSocket } from "../lib/useWebsocket";
-import { MessageType, type TranscriptionMessage } from "../lib/message";
+import {
+    MessageType,
+    type AIResultMessage,
+    type TranscriptionMessage,
+} from "../lib/message";
 
 // Optional: a tiny Insights panel component so we keep the page clean
 function InsightsPanel({ insights }: { insights: string[] }) {
@@ -139,6 +143,21 @@ export function AudioSender() {
 
         return () => {
             ws.deregisterMessageHandler("transcription");
+        };
+    }, [ws]);
+
+    // Register Insight Message
+    useEffect(() => {
+        const handleAIResults = (message: AIResultMessage) => {
+            setInsights((prevState: string[]) =>
+                prevState.concat([message.text]),
+            );
+        };
+
+        ws.registerMessageHandler("ai_result", handleAIResults);
+
+        return () => {
+            ws.deregisterMessageHandler("ai_result");
         };
     }, [ws]);
 
