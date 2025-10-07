@@ -1,3 +1,9 @@
+from interview_helper.context_manager.messages import AIResultMessage
+from interview_helper.context_manager.resource_keys import WEBSOCKET
+from interview_helper.context_manager.types import TranscriptId
+from interview_helper.context_manager.types import AsyncAiProcessor
+from interview_helper.context_manager.types import AIJob
+from interview_helper.context_manager.TextCoalescer import TextCoalescer
 from interview_helper.security.tickets import TicketStore
 from typing import Optional
 from collections import defaultdict
@@ -24,13 +30,6 @@ U = TypeVar("U", covariant=True)
 
 type AsyncAudioConsumer = Callable[["SessionContext", "AudioChunk"], Awaitable[None]]
 type AsyncAudioConsumerFinalize = Callable[["SessionContext"], Awaitable[None]]
-type AsyncAiProcessor = Callable[["AIJob"], Awaitable[None]]
-
-
-@dataclass(frozen=True)
-class AIJob:
-    ctx: "SessionContext"
-    new_text: str
 
 
 @dataclass(frozen=True)
@@ -76,9 +75,10 @@ class SessionContext:
     async def teardown(self):
         await self.manager.teardown_session(self.session_id)
 
-    async def submit_ai_processing_job(self, new_text: str):
-        job = AIJob(ctx=self, new_text=new_text)
-        await self.manager.submit_ai_processing_job(job)
+    async def accept_transcript(self, new_text: str, transcript_id: TranscriptId):
+        await self.manager.accept_transcript(
+            self.session_id, text=new_text, transcript_id=transcript_id
+        )
 
     def get_user_id(self):
         return self.manager.session_data[self.session_id].user
@@ -124,6 +124,8 @@ class AppContextManager:
 
         self.session_task_group: dict[SessionId, anyio.abc.TaskGroup] = {}
 
+        self.ai_processer = ai_processer
+
         # Track active audio sessions
         self.active_audio_sessions: set[SessionId] = set()
         self.cleanup_waiting_event: dict[SessionId, anyio.Event] = defaultdict(
@@ -143,6 +145,7 @@ class AppContextManager:
         self._job_send: anyio.streams.memory.ObjectSendStream | None = None
         self._job_recv: anyio.streams.memory.ObjectReceiveStream | None = None
         self._workers_started = False
+        self.text_coalescer: dict[SessionId, TextCoalescer] = {}
 
     async def new_session(self, user_id: UserId) -> SessionContext:
         session_id = SessionId(ULID())
@@ -158,6 +161,25 @@ class AppContextManager:
             ] = await anyio.create_task_group().__aenter__()
 
             self.active_sessions.add(session_id)
+
+            assert self.settings
+
+            # Setup Infrastructure needed to ping the AI service every once in a while
+            coalescer = TextCoalescer(
+                word_threshold=self.settings.process_transcript_every_word_count,
+                seconds=self.settings.process_transcript_every_secs,
+            )
+
+            self.text_coalescer[session_id] = coalescer
+
+            async def handler(transcript_id: TranscriptId) -> None:
+                await self._submit_ai_processing_job(
+                    AIJob(up_to_transcript_id=transcript_id, session_id=session_id)
+                )
+
+            # Run the coalescer in the session’s TaskGroup you already maintain
+            tg = self.session_task_group[session_id]
+            tg.start_soon(coalescer.run, handler)
 
         return SessionContext(manager=self, session_id=session_id)
 
@@ -279,7 +301,17 @@ class AppContextManager:
         for consumer, _ in self.audio_ingest_consumers:
             await consumer(ctx, audio_chunk)
 
-    async def submit_ai_processing_job(self, job: AIJob):
+    async def accept_transcript(
+        self, session_id: SessionId, text: str, transcript_id: TranscriptId
+    ):
+        async with self.lock:
+            assert session_id in self.active_sessions, f"{session_id} is not active!"
+
+            await self.text_coalescer[session_id].push(
+                text=text, transcript_id=transcript_id
+            )
+
+    async def _submit_ai_processing_job(self, job: AIJob):
         assert self._workers_started
         assert self._job_send is not None
 
@@ -316,7 +348,12 @@ class AppContextManager:
         async with recv:
             async for job in recv:
                 try:
-                    await self._process_job(job, worker_name=name)
+                    results = await self.ai_processer(job)
+                    ws = await self.get(job.session_id, WEBSOCKET)
+                    if ws:
+                        for result in results:
+                            await ws.send_message(AIResultMessage(text=result.text))
+
                 except Exception:
                     # Never let an exception kill the worker or the service TG
                     import logging
@@ -324,10 +361,6 @@ class AppContextManager:
                     logging.getLogger(__name__).exception(
                         "background worker %s failed processing job: %r", name, job
                     )
-
-    async def _process_job(self, job: AIJob, *, worker_name: str) -> None:
-        # TODO: Do some AI processing here
-        print(f"Processing text: {job.new_text}")
 
     async def stop_background_services(self) -> None:
         """

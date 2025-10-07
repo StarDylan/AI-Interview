@@ -1,3 +1,4 @@
+from interview_helper.context_manager.types import TranscriptId
 from interview_helper.context_manager.database import add_transcription
 from interview_helper.context_manager.messages import TranscriptionMessage
 from interview_helper.context_manager.concurrent_websocket import ConcurrentWebSocket
@@ -55,12 +56,11 @@ async def accept_transcript(ctx: SessionContext, text: str, ws: ConcurrentWebSoc
     # Send transcription data over websocket
     await ws.send_message(TranscriptionMessage(type="transcription", text=text))
 
-    # TODO: Either give this to the AI for context or ignore
-    _added_transcription_id = add_transcription(
-        ctx.manager.db, ctx.get_user_id(), ctx.session_id, text
+    added_transcription_id = TranscriptId.from_str(
+        add_transcription(ctx.manager.db, ctx.get_user_id(), ctx.session_id, text)
     )
 
-    await ctx.submit_ai_processing_job(text)
+    await ctx.accept_transcript(text, added_transcription_id)
 
 
 transcriber_consumer_pair = (

@@ -13,6 +13,12 @@ class TranscriptionMessage(BaseModel):
     text: str
 
 
+class AIResultMessage(BaseModel):
+    type: Literal["ai_result"] = "ai_result"
+    timestamp: datetime = Field(default_factory=datetime.now)
+    text: str
+
+
 class ErrorMessage(BaseModel):
     type: Literal["error"] = "error"
     timestamp: datetime = Field(default_factory=datetime.now)
@@ -37,8 +43,8 @@ class PingMessage(BaseModel):
 
 
 WebSocketMessage: type[
-    ErrorMessage | TranscriptionMessage | WebRTCMessage | PingMessage
-] = TranscriptionMessage | ErrorMessage | WebRTCMessage | PingMessage
+    ErrorMessage | TranscriptionMessage | WebRTCMessage | PingMessage | AIResultMessage
+] = ErrorMessage | TranscriptionMessage | WebRTCMessage | PingMessage | AIResultMessage
 
 
 class Envelope(BaseModel):

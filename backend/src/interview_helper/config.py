@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     min_duration: int = 5
     bytes_per_sample: int = 2
 
+    # AI Processing
+    process_transcript_every_secs: float = 60.0
+    process_transcript_every_word_count: int = 100
+
     # File paths
     vosk_model_path: Path = Field(
         default=Path("vosk_models") / "vosk-model-small-en-us-0.15"
