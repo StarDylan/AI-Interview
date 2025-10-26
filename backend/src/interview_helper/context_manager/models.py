@@ -53,4 +53,4 @@ class Transcription(Base):
         onupdate=sa.func.now(),
     )
 
-    user: Mapped["User"] = relationship(back_populates="transcriptions")
+    user: Mapped["User"] = relationship(backref="transcriptions")

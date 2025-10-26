@@ -1,5 +1,5 @@
 from datetime import datetime
-from typing import Optional, Dict, Any, Literal, Annotated
+from typing import Optional, Dict, Any, Literal, Annotated, Union
 
 from pydantic import BaseModel, Field
 
@@ -42,9 +42,13 @@ class PingMessage(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
-WebSocketMessage: type[
-    ErrorMessage | TranscriptionMessage | WebRTCMessage | PingMessage | AIResultMessage
-] = ErrorMessage | TranscriptionMessage | WebRTCMessage | PingMessage | AIResultMessage
+WebSocketMessage = Union[
+    ErrorMessage,
+    TranscriptionMessage,
+    WebRTCMessage,
+    PingMessage,
+    AIResultMessage,
+]
 
 
 class Envelope(BaseModel):

@@ -1,9 +1,6 @@
-from typing import Awaitable
-from typing import Callable
 from typing import TypeVar, Generic, final, runtime_checkable, NewType, Protocol
 from dataclasses import dataclass
 from ulid import ULID
-
 #
 # Resource Key and Types
 #
@@ -67,16 +64,11 @@ class WebSocketProtocol(Protocol):
     async def close(self) -> None: ...
 
 
-type AsyncAiProcessor = Callable[["AIJob"], Awaitable[list[AIResult]]]
-
-
 @dataclass(frozen=True)
 class AIJob:
     session_id: SessionId
-    up_to_transcript_id: TranscriptId
 
 
 @dataclass(frozen=True)
 class AIResult:
-    session_id: SessionId
-    text: str
+    text: list[str]

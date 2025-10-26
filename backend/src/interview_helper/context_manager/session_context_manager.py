@@ -1,11 +1,10 @@
 from interview_helper.context_manager.messages import AIResultMessage
 from interview_helper.context_manager.resource_keys import WEBSOCKET
-from interview_helper.context_manager.types import TranscriptId
-from interview_helper.context_manager.types import AsyncAiProcessor
+from interview_helper.context_manager.types import AIResult, TranscriptId
 from interview_helper.context_manager.types import AIJob
 from interview_helper.context_manager.TextCoalescer import TextCoalescer
 from interview_helper.security.tickets import TicketStore
-from typing import Optional
+from typing import Optional, Protocol, Type, runtime_checkable
 from collections import defaultdict
 from dataclasses import dataclass
 from ulid import ULID
@@ -24,12 +23,22 @@ from interview_helper.context_manager.types import (
 )
 from interview_helper.audio_stream_handler.types import AudioChunk
 from interview_helper.context_manager.database import PersistentDatabase
+import logging
 
 T = TypeVar("T", covariant=True)
 U = TypeVar("U", covariant=True)
 
 type AsyncAudioConsumer = Callable[["SessionContext", "AudioChunk"], Awaitable[None]]
 type AsyncAudioConsumerFinalize = Callable[["SessionContext"], Awaitable[None]]
+
+
+@runtime_checkable
+class AIAnalyzer(Protocol):
+    def __init__(self, config: Settings, db: PersistentDatabase): ...
+    async def analyze(self, job: AIJob) -> AIResult: ...
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -104,7 +113,7 @@ class AppContextManager:
         audio_ingest_consumers: tuple[
             tuple[AsyncAudioConsumer, AsyncAudioConsumerFinalize], ...
         ],
-        ai_processer: AsyncAiProcessor,
+        ai_processer: Type[AIAnalyzer],
         settings: Settings | None = None,
     ):
         # We need to protect against race-conditions since our context might end up in an
@@ -124,13 +133,13 @@ class AppContextManager:
 
         self.session_task_group: dict[SessionId, anyio.abc.TaskGroup] = {}
 
-        self.ai_processer = ai_processer
-
         # Track active audio sessions
         self.active_audio_sessions: set[SessionId] = set()
         self.cleanup_waiting_event: dict[SessionId, anyio.Event] = defaultdict(
             anyio.Event
         )
+
+        self.active_ai_analysis: dict[SessionId, anyio.Lock] = defaultdict(anyio.Lock)
 
         # Static for duration of this context, doesn't require lock.
         self.audio_ingest_consumers = audio_ingest_consumers
@@ -139,11 +148,14 @@ class AppContextManager:
 
         self.db = PersistentDatabase()
 
+        if settings:
+            self.ai_processer: None | AIAnalyzer = ai_processer(settings, self.db)
+
         # Background Serivces (e.g., to fetch AI results)
         self._background_tg: anyio.abc.TaskGroup | None = None
 
-        self._job_send: anyio.streams.memory.ObjectSendStream | None = None
-        self._job_recv: anyio.streams.memory.ObjectReceiveStream | None = None
+        self._job_send: anyio.abc.ObjectSendStream[AIJob] | None = None
+        self._job_recv: anyio.abc.ObjectReceiveStream[AIJob] | None = None
         self._workers_started = False
         self.text_coalescer: dict[SessionId, TextCoalescer] = {}
 
@@ -173,9 +185,7 @@ class AppContextManager:
             self.text_coalescer[session_id] = coalescer
 
             async def handler(transcript_id: TranscriptId) -> None:
-                await self._submit_ai_processing_job(
-                    AIJob(up_to_transcript_id=transcript_id, session_id=session_id)
-                )
+                await self._submit_ai_processing_job(AIJob(session_id=session_id))
 
             # Run the coalescer in the session’s TaskGroup you already maintain
             tg = self.session_task_group[session_id]
@@ -325,6 +335,12 @@ class AppContextManager:
         if self._background_tg is not None:
             return  # already started
 
+        if self.ai_processer is None:
+            logger.warning(
+                "Tried to start background services, but no ai_processor is set!"
+            )
+            return  # Nothing to start, we didn't provide a processor
+
         # Long-lived service TG
         self._background_tg = await anyio.create_task_group().__aenter__()
 
@@ -346,13 +362,22 @@ class AppContextManager:
         self, name: str, recv: anyio.abc.ObjectReceiveStream[AIJob]
     ) -> None:
         async with recv:
+            # Jobs are simply to "poke" the AI engine that data is incoming.
+            # If it is already running that is fine, there will always be another "poke"
             async for job in recv:
                 try:
-                    results = await self.ai_processer(job)
+                    if self.active_ai_analysis[job.session_id].locked():
+                        continue
+                    async with self.active_ai_analysis[job.session_id]:
+                        assert self.ai_processer, (
+                            "Should never happen since we check this is not None when we start background services"
+                        )
+                        results = await self.ai_processer.analyze(job)
+
                     ws = await self.get(job.session_id, WEBSOCKET)
                     if ws:
-                        for result in results:
-                            await ws.send_message(AIResultMessage(text=result.text))
+                        for result in results.text:
+                            await ws.send_message(AIResultMessage(text=result))
 
                 except Exception:
                     # Never let an exception kill the worker or the service TG

@@ -152,3 +152,22 @@ def add_transcription(
         f"Transcription not created in DB! session_id: {session_id}, text:'{text}'"
     )
     return result
+
+
+# TODO: Really should be by-project
+def get_all_transcripts(db: PersistentDatabase, session_id: SessionId) -> list[str]:
+    """
+    Gets all transcript results, sorted by creation date (ascending)
+    """
+    with db.begin() as conn:
+        rows = (
+            conn.execute(
+                sa.select(models.Transcription.text_output)
+                .where(models.Transcription.session_id == str(session_id))
+                .order_by(models.Transcription.created_at.asc())
+            )
+            .scalars()
+            .all()
+        )
+
+    return list(rows)
