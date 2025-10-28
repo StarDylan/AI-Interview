@@ -28,8 +28,14 @@ dependencies = [
     "websockets>=15.0.1",
 ]
 
-[tool.pyrefly]
-search-path = ["src/"]
+[tool.basedpyright]
+include = ["src/"]
+exclude = [
+    "**/__pycache__",
+]
+
+[[tool.basedpyright.executionEnvironments]]
+root = "backend/src"
 
 [dependency-groups]
 dev = [
