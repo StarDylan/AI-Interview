@@ -1,3 +1,5 @@
+from collections.abc import Sequence
+from typing import TypedDict
 from interview_helper.context_manager.types import ProjectId, SessionId
 from interview_helper.context_manager.types import UserId
 from alembic.config import Config
@@ -171,3 +173,49 @@ def get_all_transcripts(db: PersistentDatabase, project_id: ProjectId) -> list[s
         )
 
     return list(rows)
+
+
+class ProjectListing(TypedDict):
+    id: str
+    name: str
+
+
+def get_all_projects(db: PersistentDatabase) -> Sequence[ProjectListing]:
+    """
+    Gets all transcript results, sorted by creation date (ascending)
+    """
+    with db.begin() as conn:
+        rows = (
+            conn.execute(
+                sa.select(models.Project.project_id, models.Project.name).order_by(
+                    models.Project.created_at.desc()
+                )
+            )
+            .tuples()
+            .all()
+        )
+
+    projects: list[ProjectListing] = []
+    for id, name in rows:
+        projects.append({"id": id, "name": name})
+
+    return projects
+
+
+def create_new_project(
+    db: PersistentDatabase, user_id: UserId, project_name: str
+) -> ProjectId:
+    """
+    Creates a new project and returns the project ID
+    """
+    with db.begin() as conn:
+        result = conn.scalar(
+            sa.insert(models.Project).returning(models.Project.project_id),
+            {
+                "creator_user_id": str(user_id),
+                "name": project_name,
+            },
+        )
+
+    assert result, f"Project not created in DB! name: {project_name}"
+    return ProjectId.from_str(result)

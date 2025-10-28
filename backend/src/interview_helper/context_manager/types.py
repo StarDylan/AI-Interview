@@ -1,4 +1,13 @@
-from typing import TypeVar, Generic, final, runtime_checkable, NewType, Protocol
+from typing import (
+    TypeVar,
+    Generic,
+    cast,
+    final,
+    override,
+    runtime_checkable,
+    NewType,
+    Protocol,
+)
 from dataclasses import dataclass
 from ulid import ULID
 #
@@ -35,17 +44,30 @@ class UserId:
 
     @classmethod
     def from_str(cls, user_id: str) -> "UserId":
-        return cls(_user_id=ULID.from_str(user_id.upper()))
+        return cls(_user_id=cast(ULID, ULID.from_str(user_id.upper())))
 
 
 SessionId = NewType("SessionId", ULID)
-ProjectId = NewType("ProjectId", ULID)
+
+
+@dataclass
+class ProjectId:
+    _project_id: ULID
+
+    @override
+    def __str__(self):
+        return str(self._project_id).lower()
+
+    @classmethod
+    def from_str(cls, project_id: str) -> "ProjectId":
+        return cls(_project_id=cast(ULID, ULID.from_str(project_id.upper())))
 
 
 @dataclass
 class TranscriptId:
     _transcript_id: ULID
 
+    @override
     def __str__(self):
         return str(self._transcript_id).lower()
 

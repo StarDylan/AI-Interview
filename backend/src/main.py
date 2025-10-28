@@ -5,7 +5,6 @@ from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.messages import PingMessage
 from starlette.responses import RedirectResponse
-from typing import Dict
 from interview_helper.security.http import (
     verify_jwt_token,
     get_user_info_from_oidc_provider,
@@ -34,7 +33,12 @@ from interview_helper.context_manager.resource_keys import WEBSOCKET
 from interview_helper.audio_stream_handler.audio_stream_handler import (
     handle_webrtc_message,
 )
-from interview_helper.context_manager.database import get_or_add_user
+from interview_helper.context_manager.database import (
+    ProjectListing,
+    create_new_project,
+    get_all_projects,
+    get_or_add_user,
+)
 
 from fastapi.security import OpenIdConnect
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
@@ -97,9 +101,9 @@ SCOPE = "openid profile email"
 
 FRONTEND_REDIRECT_URI = session_manager.get_settings().frontend_redirect_uri
 
-oidc_config = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
+oidc_config: dict[str, str] = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
 
-signing_algos = oidc_config.get("id_token_signing_alg_values_supported", [])
+signing_algos: str = oidc_config.get("id_token_signing_alg_values_supported", "")
 jwks_client = jwt.PyJWKClient(oidc_config["jwks_uri"])
 AUTHORIZATION_ENDPOINT = oidc_config["authorization_endpoint"]
 TOKEN_ENDPOINT = oidc_config["token_endpoint"]
@@ -116,7 +120,7 @@ async def root():
     return "Interview Helper Backend"
 
 
-active_states: Dict[str, tuple[str, str]] = {}
+active_states: dict[str, tuple[str, str]] = {}
 
 
 @app.get("/login")
@@ -427,6 +431,31 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
     except WebSocketDisconnect:
         await context.teardown()
         print(f"Closed session {context.session_id} for {ticket.user_id}")
+
+
+@app.get("/project")
+def list_all_projects():
+    """
+    Returns all projects
+    """
+    return get_all_projects(session_manager.db)
+
+
+@app.post("/project")
+def create_project(
+    project_name: str, token: Annotated[str, Depends(oidc_scheme)]
+) -> ProjectListing:
+    """
+    Creates a new project
+    """
+    clean_token = token.removeprefix("Bearer ")
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+
+    project_id = create_new_project(
+        session_manager.db, UserId.from_str(user_claims.sub), project_name
+    )
+
+    return ProjectListing(id=str(project_id), name=project_name)
 
 
 if __name__ == "__main__":

@@ -75,6 +75,10 @@ class Project(Base):
 
     name: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
+    creator_user_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("users.user_id"), nullable=False
+    )
+
     created_at: Mapped[DateTime] = mapped_column(
         sa.DateTime, nullable=False, server_default=sa.func.now()
     )
