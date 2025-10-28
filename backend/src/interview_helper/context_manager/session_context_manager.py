@@ -185,7 +185,7 @@ class AppContextManager:
 
                 self.text_coalescer[session_id] = coalescer
 
-                async def handler(transcript_id: TranscriptId) -> None:
+                async def handler(_transcript_id: TranscriptId) -> None:
                     await self._submit_ai_processing_job(AIJob(session_id=session_id))
 
                 # Run the coalescer in the session’s TaskGroup you already maintain
