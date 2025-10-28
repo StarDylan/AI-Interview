@@ -148,8 +148,9 @@ class AppContextManager:
 
         self.db = PersistentDatabase()
 
-        if settings:
-            self.ai_processer: None | AIAnalyzer = ai_processer(settings, self.db)
+        self.ai_processor: None | AIAnalyzer = (
+            ai_processer(settings, self.db) if settings else None
+        )
 
         # Background Serivces (e.g., to fetch AI results)
         self._background_tg: anyio.abc.TaskGroup | None = None
@@ -174,7 +175,7 @@ class AppContextManager:
 
             self.active_sessions.add(session_id)
 
-            if self.ai_processer is not None:
+            if self.ai_processor is not None:
                 assert self.settings
 
                 # Setup Infrastructure needed to ping the AI service every once in a while
@@ -336,7 +337,7 @@ class AppContextManager:
         if self._background_tg is not None:
             return  # already started
 
-        if self.ai_processer is None:
+        if self.ai_processor is None:
             logger.warning(
                 "Tried to start background services, but no ai_processor is set!"
             )
@@ -370,10 +371,10 @@ class AppContextManager:
                     if self.active_ai_analysis[job.session_id].locked():
                         continue
                     async with self.active_ai_analysis[job.session_id]:
-                        assert self.ai_processer, (
+                        assert self.ai_processor, (
                             "Should never happen since we check this is not None when we start background services"
                         )
-                        results = await self.ai_processer.analyze(job)
+                        results = await self.ai_processor.analyze(job)
 
                     ws = await self.get(job.session_id, WEBSOCKET)
                     if ws:

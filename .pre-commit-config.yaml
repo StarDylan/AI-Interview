@@ -35,7 +35,6 @@ repos:
         entry: uv
         args: ["--directory=backend", "run", "pytest"]
         language: system
-        files: python
         pass_filenames: false
         stages: [pre-commit]
 
@@ -44,7 +43,6 @@ repos:
         entry: uv
         args: ["--directory=backend", "run", "basedpyright"]
         language: system
-        files: python
         pass_filenames: false
         stages: [pre-commit]
 

@@ -12,8 +12,8 @@ pytestmark = pytest.mark.anyio
 
 async def test_context_manager_maintains_individual_state():
     test_resource_key = ResourceKey[str]("string")
-    contextManager1 = AppContextManager((), FakeAnalyzer)
-    contextManager2 = AppContextManager((), FakeAnalyzer)
+    contextManager1 = AppContextManager((), ai_processer=FakeAnalyzer)
+    contextManager2 = AppContextManager((), ai_processer=FakeAnalyzer)
 
     ctx = await contextManager1.new_session(UserId(ULID()))
 
