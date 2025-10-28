@@ -72,8 +72,8 @@ jobs:
       - name: Run Ruff formatting check
         run: uv run ruff format --check .
 
-      - name: Run Pyrefly type check
-        run: uv run pyrefly check
+      - name: Run Basedpyright type check
+        run: uv run basedpyright
 
       - name: Run Tests with Coverage
         run: uv run pytest -v --cov=src --cov-report=xml --cov-report=term-missing

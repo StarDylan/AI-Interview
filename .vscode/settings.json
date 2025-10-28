@@ -14,5 +14,7 @@
     "**/*.pyd": true,
     "**/.venv": true,
     "**/node_modules": true
-  }
+},
+"python.languageServer": "None",
+"python.analysis.typeCheckingMode": "off"
 }
