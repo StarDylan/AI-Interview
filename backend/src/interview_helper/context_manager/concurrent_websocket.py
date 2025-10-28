@@ -1,6 +1,6 @@
 import anyio.abc
 import anyio
-from anyio.streams.memory import MemoryObjectReceiveStream
+from anyio.abc import ObjectReceiveStream
 from typing import Optional
 
 from interview_helper.context_manager.types import WebSocketProtocol
@@ -69,7 +69,7 @@ class ConcurrentWebSocket:
 
     async def _writer(
         self,
-        recieve_stream_to_client: MemoryObjectReceiveStream[WebSocketMessage],
+        recieve_stream_to_client: ObjectReceiveStream[WebSocketMessage],
         websocket: WebSocketProtocol,
     ) -> None:
         async with recieve_stream_to_client:

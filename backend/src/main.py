@@ -1,4 +1,6 @@
 #!/usr/bin/env python3
+from contextlib import asynccontextmanager
+from interview_helper.ai_analysis.ai_analysis import SimpleAnalyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.messages import PingMessage
@@ -51,15 +53,25 @@ logger = logging.getLogger(__name__)
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
     (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
-    # type: ignore[arg-type]
-    settings=Settings(),
+    ai_processer=SimpleAnalyzer,
+    settings=Settings(),  # type: ignore (env vars)
 )
+
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """background task starts at statrup"""
+    await session_manager.start_background_services()
+    yield
+    await session_manager.stop_background_services()
+
 
 # Create FastAPI app
 app = FastAPI(
     title="Modular WebRTC Transcription Server",
     description="A refactored FastAPI-based WebRTC server with functional, modular architecture",
     version="2.0.0",
+    lifespan=lifespan,
 )
 
 app.add_middleware(

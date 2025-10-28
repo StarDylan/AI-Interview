@@ -1,7 +1,7 @@
 from pydantic_settings.main import SettingsConfigDict
 from typing import Annotated
 from pathlib import Path
-from pydantic import Field, field_validator
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, NoDecode
 
 
@@ -47,6 +47,15 @@ class Settings(BaseSettings):
     target_sample_rate: int = 48000
     min_duration: int = 5
     bytes_per_sample: int = 2
+
+    # AI Processing
+    process_transcript_every_secs: float = 60.0
+    process_transcript_every_word_count: int = 100
+
+    azure_api_endpoint: str = Field(alias="OPENAI_API_ENDPOINT")
+    azure_api_key: SecretStr = Field(alias="OPENAI_API_KEY")
+    azure_api_version: str = "2024-12-01-preview"
+    azure_deployment: str = Field(alias="AZURE_DEPLOYMENT")
 
     # File paths
     vosk_model_path: Path = Field(

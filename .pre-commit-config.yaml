@@ -35,16 +35,14 @@ repos:
         entry: uv
         args: ["--directory=backend", "run", "pytest"]
         language: system
-        files: python
         pass_filenames: false
         stages: [pre-commit]
 
       - id: pytest
-        name: Run pyrefly via uv
+        name: Run basedpyright via uv
         entry: uv
-        args: ["--directory=backend", "run", "pyrefly"]
+        args: ["--directory=backend", "run", "basedpyright"]
         language: system
-        files: python
         pass_filenames: false
         stages: [pre-commit]
 

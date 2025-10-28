@@ -1,11 +1,17 @@
+from interview_helper.context_manager.messages import AIResultMessage
+from interview_helper.context_manager.resource_keys import WEBSOCKET
+from interview_helper.context_manager.types import AIResult, TranscriptId
+from interview_helper.context_manager.types import AIJob
+from interview_helper.context_manager.TextCoalescer import TextCoalescer
 from interview_helper.security.tickets import TicketStore
-from typing import Optional
+from typing import Optional, Protocol, Type, runtime_checkable
 from collections import defaultdict
 from dataclasses import dataclass
 from ulid import ULID
 from typing import cast, TypeVar, Callable, Awaitable
 import anyio
 import anyio.abc
+import anyio.streams.memory
 import sys
 
 from interview_helper.config import Settings
@@ -17,12 +23,22 @@ from interview_helper.context_manager.types import (
 )
 from interview_helper.audio_stream_handler.types import AudioChunk
 from interview_helper.context_manager.database import PersistentDatabase
+import logging
 
 T = TypeVar("T", covariant=True)
 U = TypeVar("U", covariant=True)
 
 type AsyncAudioConsumer = Callable[["SessionContext", "AudioChunk"], Awaitable[None]]
 type AsyncAudioConsumerFinalize = Callable[["SessionContext"], Awaitable[None]]
+
+
+@runtime_checkable
+class AIAnalyzer(Protocol):
+    def __init__(self, config: Settings, db: PersistentDatabase): ...
+    async def analyze(self, job: AIJob) -> AIResult: ...
+
+
+logger = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -68,6 +84,14 @@ class SessionContext:
     async def teardown(self):
         await self.manager.teardown_session(self.session_id)
 
+    async def accept_transcript(self, new_text: str, transcript_id: TranscriptId):
+        await self.manager.accept_transcript(
+            self.session_id, text=new_text, transcript_id=transcript_id
+        )
+
+    def get_user_id(self):
+        return self.manager.session_data[self.session_id].user
+
 
 # FIXME: Remove global project + user
 GLOBAL_PROJECT = ProjectId(ULID())
@@ -89,6 +113,7 @@ class AppContextManager:
         audio_ingest_consumers: tuple[
             tuple[AsyncAudioConsumer, AsyncAudioConsumerFinalize], ...
         ],
+        ai_processer: Type[AIAnalyzer],
         settings: Settings | None = None,
     ):
         # We need to protect against race-conditions since our context might end up in an
@@ -114,12 +139,26 @@ class AppContextManager:
             anyio.Event
         )
 
+        self.active_ai_analysis: dict[SessionId, anyio.Lock] = defaultdict(anyio.Lock)
+
         # Static for duration of this context, doesn't require lock.
         self.audio_ingest_consumers = audio_ingest_consumers
         self.settings = settings
         self.ticket_store = TicketStore()
 
         self.db = PersistentDatabase()
+
+        self.ai_processor: None | AIAnalyzer = (
+            ai_processer(settings, self.db) if settings else None
+        )
+
+        # Background Serivces (e.g., to fetch AI results)
+        self._background_tg: anyio.abc.TaskGroup | None = None
+
+        self._job_send: anyio.abc.ObjectSendStream[AIJob] | None = None
+        self._job_recv: anyio.abc.ObjectReceiveStream[AIJob] | None = None
+        self._workers_started = False
+        self.text_coalescer: dict[SessionId, TextCoalescer] = {}
 
     async def new_session(self, user_id: UserId) -> SessionContext:
         session_id = SessionId(ULID())
@@ -135,6 +174,24 @@ class AppContextManager:
             ] = await anyio.create_task_group().__aenter__()
 
             self.active_sessions.add(session_id)
+
+            if self.ai_processor is not None:
+                assert self.settings
+
+                # Setup Infrastructure needed to ping the AI service every once in a while
+                coalescer = TextCoalescer(
+                    word_threshold=self.settings.process_transcript_every_word_count,
+                    seconds=self.settings.process_transcript_every_secs,
+                )
+
+                self.text_coalescer[session_id] = coalescer
+
+                async def handler(_transcript_id: TranscriptId) -> None:
+                    await self._submit_ai_processing_job(AIJob(session_id=session_id))
+
+                # Run the coalescer in the session’s TaskGroup you already maintain
+                tg = self.session_task_group[session_id]
+                tg.start_soon(coalescer.run, handler)
 
         return SessionContext(manager=self, session_id=session_id)
 
@@ -255,3 +312,98 @@ class AppContextManager:
         ctx = SessionContext(self, session_id)
         for consumer, _ in self.audio_ingest_consumers:
             await consumer(ctx, audio_chunk)
+
+    async def accept_transcript(
+        self, session_id: SessionId, text: str, transcript_id: TranscriptId
+    ):
+        async with self.lock:
+            assert session_id in self.active_sessions, f"{session_id} is not active!"
+
+            await self.text_coalescer[session_id].push(
+                text=text, transcript_id=transcript_id
+            )
+
+    async def _submit_ai_processing_job(self, job: AIJob):
+        assert self._workers_started
+        assert self._job_send is not None
+
+        await self._job_send.send(job)
+
+    async def start_background_services(self, max_buffer_size=5) -> None:
+        """
+        Creates a global TaskGroup + job queue + worker pool.
+        Call this once on app startup (FastAPI lifespan).
+        """
+        if self._background_tg is not None:
+            return  # already started
+
+        if self.ai_processor is None:
+            logger.warning(
+                "Tried to start background services, but no ai_processor is set!"
+            )
+            return  # Nothing to start, we didn't provide a processor
+
+        # Long-lived service TG
+        self._background_tg = await anyio.create_task_group().__aenter__()
+
+        job_send, job_recv = anyio.create_memory_object_stream[AIJob](
+            max_buffer_size=max_buffer_size
+        )
+        self._job_send = job_send
+        self._job_recv = job_recv
+
+        # Spawn workers inside service TG
+        for i in range(4):
+            self._background_tg.start_soon(
+                self._worker, f"bg-w{i}", self._job_recv.clone()
+            )
+
+        self._workers_started = True
+
+    async def _worker(
+        self, name: str, recv: anyio.abc.ObjectReceiveStream[AIJob]
+    ) -> None:
+        async with recv:
+            # Jobs are simply to "poke" the AI engine that data is incoming.
+            # If it is already running that is fine, there will always be another "poke"
+            async for job in recv:
+                try:
+                    if self.active_ai_analysis[job.session_id].locked():
+                        continue
+                    async with self.active_ai_analysis[job.session_id]:
+                        assert self.ai_processor, (
+                            "Should never happen since we check this is not None when we start background services"
+                        )
+                        results = await self.ai_processor.analyze(job)
+
+                    ws = await self.get(job.session_id, WEBSOCKET)
+                    if ws:
+                        for result in results.text:
+                            await ws.send_message(AIResultMessage(text=result))
+
+                except Exception:
+                    # Never let an exception kill the worker or the service TG
+                    import logging
+
+                    logging.getLogger(__name__).exception(
+                        "background worker %s failed processing job: %r", name, job
+                    )
+
+    async def stop_background_services(self) -> None:
+        """
+        Gracefully drains and shuts down the background service.
+        """
+        if self._background_tg is None:
+            return
+
+        # Close send end so workers finish when queue drains
+        if self._job_send is not None:
+            await self._job_send.aclose()
+
+        # Exit task group (this will wait for workers to exit)
+        await self._background_tg.__aexit__(None, None, None)
+
+        # Clear handles
+        self._background_tg = None
+        self._job_send = None
+        self._job_recv = None

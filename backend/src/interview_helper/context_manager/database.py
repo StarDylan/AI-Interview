@@ -1,3 +1,4 @@
+from interview_helper.context_manager.types import SessionId
 from interview_helper.context_manager.types import UserId
 from alembic.config import Config
 from alembic import command
@@ -7,6 +8,7 @@ import sqlalchemy as sa
 from sqlalchemy.event import listen as sa_listen
 from contextlib import contextmanager
 from dataclasses import dataclass
+import interview_helper.context_manager.models as models
 
 
 class PersistentDatabase:
@@ -126,3 +128,46 @@ def get_or_add_user(db: PersistentDatabase, oidc_id: str, full_name: str) -> Use
             full_name=full_name,
             oidc_id=oidc_id,
         )
+
+
+def add_transcription(
+    db: PersistentDatabase, user_id: UserId, session_id: SessionId, text: str
+) -> str:
+    """
+    Adds a transcription result, returns the transcription ID
+    """
+    with db.begin() as conn:
+        result = conn.scalar(
+            sa.insert(models.Transcription).returning(
+                models.Transcription.transcription_id
+            ),
+            {
+                "user_id": str(user_id),
+                "session_id": str(session_id),
+                "text_output": text,
+            },
+        )
+
+    assert result, (
+        f"Transcription not created in DB! session_id: {session_id}, text:'{text}'"
+    )
+    return result
+
+
+# TODO: Really should be by-project
+def get_all_transcripts(db: PersistentDatabase, session_id: SessionId) -> list[str]:
+    """
+    Gets all transcript results, sorted by creation date (ascending)
+    """
+    with db.begin() as conn:
+        rows = (
+            conn.execute(
+                sa.select(models.Transcription.text_output)
+                .where(models.Transcription.session_id == str(session_id))
+                .order_by(models.Transcription.created_at.asc())
+            )
+            .scalars()
+            .all()
+        )
+
+    return list(rows)

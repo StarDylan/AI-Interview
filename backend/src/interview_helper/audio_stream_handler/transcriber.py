@@ -1,3 +1,5 @@
+from interview_helper.context_manager.types import TranscriptId
+from interview_helper.context_manager.database import add_transcription
 from interview_helper.context_manager.messages import TranscriptionMessage
 from interview_helper.context_manager.concurrent_websocket import ConcurrentWebSocket
 from interview_helper.context_manager.resource_keys import WEBSOCKET
@@ -15,7 +17,9 @@ async def vosk_close_transcriber(ctx: SessionContext):
     ws = await ctx.get_or_wait(WEBSOCKET)
 
     if rec is not None:
-        await accept_transcript(ctx, rec.FinalResult(), ws)
+        text = json.loads(rec.FinalResult())["text"]
+        if text:
+            await accept_transcript(ctx, text, ws)
 
 
 async def vosk_transcribe_audio_consumer(ctx: SessionContext, audio_chunk: AudioChunk):
@@ -43,14 +47,20 @@ async def vosk_transcribe_audio_consumer(ctx: SessionContext, audio_chunk: Audio
 
         if rec.AcceptWaveform(buf):
             # Finalized segment
-            await accept_transcript(ctx, json.loads(rec.Result()), ws)
+            text = json.loads(rec.Result())["text"]
+            if text:
+                await accept_transcript(ctx, text, ws)
 
 
-async def accept_transcript(ctx: SessionContext, data, ws: ConcurrentWebSocket):
-    text = data["text"]
-
+async def accept_transcript(ctx: SessionContext, text: str, ws: ConcurrentWebSocket):
     # Send transcription data over websocket
     await ws.send_message(TranscriptionMessage(type="transcription", text=text))
+
+    added_transcription_id = TranscriptId.from_str(
+        add_transcription(ctx.manager.db, ctx.get_user_id(), ctx.session_id, text)
+    )
+
+    await ctx.accept_transcript(text, added_transcription_id)
 
 
 transcriber_consumer_pair = (
