@@ -3,8 +3,7 @@ from interview_helper.context_manager.database import (
     PersistentDatabase,
     get_all_transcripts,
 )
-from interview_helper.context_manager.types import AIResult
-from interview_helper.context_manager.session_context_manager import AIJob
+from interview_helper.context_manager.types import AIJob, AIResult
 from langchain_openai import AzureChatOpenAI
 from langchain.agents import create_agent
 from pydantic import BaseModel
@@ -61,7 +60,7 @@ class SimpleAnalyzer:
             Analysis and suggestions from the LLM
         """
 
-        interview_transcript = " ".join(get_all_transcripts(self.db, job.session_id))
+        interview_transcript = " ".join(get_all_transcripts(self.db, job.project_id))
 
         prompt = dedent(f"""\
             Current interview:
@@ -103,6 +102,6 @@ class FakeAnalyzer:
     async def analyze(self, job: AIJob) -> AIResult:
         return AIResult(
             text=[
-                f"I am a dummy analyzer..., here is my input I got:\n {' '.join(get_all_transcripts(self.db, job.session_id))}"
+                f"I am a dummy analyzer..., here is my input I got:\n {' '.join(get_all_transcripts(self.db, job.project_id))}"
             ]
         )

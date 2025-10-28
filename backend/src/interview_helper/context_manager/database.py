@@ -1,4 +1,4 @@
-from interview_helper.context_manager.types import SessionId
+from interview_helper.context_manager.types import ProjectId, SessionId
 from interview_helper.context_manager.types import UserId
 from alembic.config import Config
 from alembic import command
@@ -155,7 +155,7 @@ def add_transcription(
 
 
 # TODO: Really should be by-project
-def get_all_transcripts(db: PersistentDatabase, session_id: SessionId) -> list[str]:
+def get_all_transcripts(db: PersistentDatabase, project_id: ProjectId) -> list[str]:
     """
     Gets all transcript results, sorted by creation date (ascending)
     """
@@ -163,7 +163,7 @@ def get_all_transcripts(db: PersistentDatabase, session_id: SessionId) -> list[s
         rows = (
             conn.execute(
                 sa.select(models.Transcription.text_output)
-                .where(models.Transcription.session_id == str(session_id))
+                .where(models.Transcription.project_id == str(project_id))
                 .order_by(models.Transcription.created_at.asc())
             )
             .scalars()

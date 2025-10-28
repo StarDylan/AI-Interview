@@ -2,14 +2,6 @@
     "files": {
         "./src/interview_helper/ai_analysis/ai_analysis.py": [
             {
-                "code": "reportPrivateLocalImportUsage",
-                "range": {
-                    "startColumn": 69,
-                    "endColumn": 74,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportUnknownVariableType",
                 "range": {
                     "startColumn": 29,
@@ -864,32 +856,6 @@
                 }
             }
         ],
-        "./src/interview_helper/context_manager/models.py": [
-            {
-                "code": "reportUnannotatedClassAttribute",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 17,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportImplicitOverride",
-                "range": {
-                    "startColumn": 8,
-                    "endColumn": 16,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnannotatedClassAttribute",
-                "range": {
-                    "startColumn": 4,
-                    "endColumn": 17,
-                    "lineCount": 1
-                }
-            }
-        ],
         "./src/interview_helper/context_manager/resource_keys.py": [
             {
                 "code": "reportMissingTypeStubs",
@@ -942,14 +908,6 @@
                 }
             },
             {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 34,
-                    "endColumn": 62,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportDeprecated",
                 "range": {
                     "startColumn": 22,
@@ -962,22 +920,6 @@
                 "range": {
                     "startColumn": 13,
                     "endColumn": 17,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 8,
-                    "endColumn": 28,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnannotatedClassAttribute",
-                "range": {
-                    "startColumn": 13,
-                    "endColumn": 28,
                     "lineCount": 1
                 }
             },
@@ -1022,30 +964,6 @@
                 }
             },
             {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 12,
-                    "endColumn": 32,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 12,
-                    "endColumn": 36,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 33,
-                    "endColumn": 53,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportDeprecated",
                 "range": {
                     "startColumn": 71,
@@ -1054,50 +972,10 @@
                 }
             },
             {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 33,
-                    "endColumn": 53,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 33,
-                    "endColumn": 53,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 12,
-                    "endColumn": 32,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 12,
-                    "endColumn": 39,
-                    "lineCount": 1
-                }
-            },
-            {
                 "code": "reportUnusedCallResult",
                 "range": {
                     "startColumn": 8,
                     "endColumn": 52,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnknownMemberType",
-                "range": {
-                    "startColumn": 33,
-                    "endColumn": 53,
                     "lineCount": 1
                 }
             },

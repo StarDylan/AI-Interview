@@ -66,7 +66,7 @@ class WebSocketProtocol(Protocol):
 
 @dataclass(frozen=True)
 class AIJob:
-    session_id: SessionId
+    project_id: ProjectId
 
 
 @dataclass(frozen=True)

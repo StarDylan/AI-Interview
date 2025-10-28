@@ -94,8 +94,7 @@ class SessionContext:
 
 
 # FIXME: Remove global project + user
-GLOBAL_PROJECT = ProjectId(ULID())
-GLOBAL_USER = UserId(ULID())
+GLOBAL_PROJECT = ProjectId(ULID(b"0" * 16))
 
 
 class AppContextManager:
@@ -129,7 +128,7 @@ class AppContextManager:
         ] = defaultdict(anyio.Event)
 
         self.session_data: dict[SessionId, AppContextManager.SessionData] = {}
-        self.active_sessions = set()
+        self.active_sessions: set[SessionId] = set()
 
         self.session_task_group: dict[SessionId, anyio.abc.TaskGroup] = {}
 
@@ -139,7 +138,7 @@ class AppContextManager:
             anyio.Event
         )
 
-        self.active_ai_analysis: dict[SessionId, anyio.Lock] = defaultdict(anyio.Lock)
+        self.active_ai_analysis: dict[ProjectId, anyio.Lock] = defaultdict(anyio.Lock)
 
         # Static for duration of this context, doesn't require lock.
         self.audio_ingest_consumers = audio_ingest_consumers
@@ -187,7 +186,9 @@ class AppContextManager:
                 self.text_coalescer[session_id] = coalescer
 
                 async def handler(_transcript_id: TranscriptId) -> None:
-                    await self._submit_ai_processing_job(AIJob(session_id=session_id))
+                    await self._submit_ai_processing_job(
+                        AIJob(project_id=GLOBAL_PROJECT)
+                    )
 
                 # Run the coalescer in the session’s TaskGroup you already maintain
                 tg = self.session_task_group[session_id]
@@ -368,18 +369,25 @@ class AppContextManager:
             # If it is already running that is fine, there will always be another "poke"
             async for job in recv:
                 try:
-                    if self.active_ai_analysis[job.session_id].locked():
+                    if self.active_ai_analysis[job.project_id].locked():
                         continue
-                    async with self.active_ai_analysis[job.session_id]:
+                    async with self.active_ai_analysis[job.project_id]:
                         assert self.ai_processor, (
                             "Should never happen since we check this is not None when we start background services"
                         )
                         results = await self.ai_processor.analyze(job)
 
-                    ws = await self.get(job.session_id, WEBSOCKET)
-                    if ws:
-                        for result in results.text:
-                            await ws.send_message(AIResultMessage(text=result))
+                    sessions: set[SessionId] = set()
+                    for session, data in self.session_data.items():
+                        if data.project == job.project_id:
+                            sessions.add(session)
+
+                    for session in sessions:
+                        if session in self.active_sessions:
+                            ws = await self.get(session, WEBSOCKET)
+                            if ws:
+                                for result in results.text:
+                                    await ws.send_message(AIResultMessage(text=result))
 
                 except Exception:
                     # Never let an exception kill the worker or the service TG
