@@ -1,4 +1,4 @@
-from interview_helper.ai_analysis.ai_analysis import fake_ai_analyzer
+from interview_helper.ai_analysis.ai_analysis import FakeAnalyzer
 from ulid import ULID
 from interview_helper.context_manager.types import UserId
 import pytest
@@ -12,8 +12,8 @@ pytestmark = pytest.mark.anyio
 
 async def test_context_manager_maintains_individual_state():
     test_resource_key = ResourceKey[str]("string")
-    contextManager1 = AppContextManager((), fake_ai_analyzer)
-    contextManager2 = AppContextManager((), fake_ai_analyzer)
+    contextManager1 = AppContextManager((), FakeAnalyzer)
+    contextManager2 = AppContextManager((), FakeAnalyzer)
 
     ctx = await contextManager1.new_session(UserId(ULID()))
 
@@ -29,7 +29,7 @@ async def test_context_manager_maintains_individual_state():
 async def test_content_manager_can_wait():
     test_resource_key1 = ResourceKey[str]("string")
     test_resource_key2 = ResourceKey[str]("string2")
-    context_manager = AppContextManager((), fake_ai_analyzer)
+    context_manager = AppContextManager((), FakeAnalyzer)
     ctx = await context_manager.new_session(UserId(ULID()))
 
     got = {}
@@ -69,7 +69,7 @@ async def test_content_manager_can_wait():
 
 async def test_content_manager_basic_can_wait():
     test_resource_key1 = ResourceKey[str]("string")
-    context_manager = AppContextManager((), fake_ai_analyzer)
+    context_manager = AppContextManager((), FakeAnalyzer)
     ctx = await context_manager.new_session(UserId(ULID()))
 
     # Test basic get_and_wait
@@ -78,7 +78,7 @@ async def test_content_manager_basic_can_wait():
 
 
 async def test_get_settings():
-    cm = AppContextManager((), fake_ai_analyzer)
+    cm = AppContextManager((), FakeAnalyzer)
 
     # Ensure that this causes an error so we don't inadvertently use it in tests
     with pytest.raises(AssertionError):

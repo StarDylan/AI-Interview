@@ -174,22 +174,23 @@ class AppContextManager:
 
             self.active_sessions.add(session_id)
 
-            assert self.settings
+            if self.ai_processer is not None:
+                assert self.settings
 
-            # Setup Infrastructure needed to ping the AI service every once in a while
-            coalescer = TextCoalescer(
-                word_threshold=self.settings.process_transcript_every_word_count,
-                seconds=self.settings.process_transcript_every_secs,
-            )
+                # Setup Infrastructure needed to ping the AI service every once in a while
+                coalescer = TextCoalescer(
+                    word_threshold=self.settings.process_transcript_every_word_count,
+                    seconds=self.settings.process_transcript_every_secs,
+                )
 
-            self.text_coalescer[session_id] = coalescer
+                self.text_coalescer[session_id] = coalescer
 
-            async def handler(transcript_id: TranscriptId) -> None:
-                await self._submit_ai_processing_job(AIJob(session_id=session_id))
+                async def handler(transcript_id: TranscriptId) -> None:
+                    await self._submit_ai_processing_job(AIJob(session_id=session_id))
 
-            # Run the coalescer in the session’s TaskGroup you already maintain
-            tg = self.session_task_group[session_id]
-            tg.start_soon(coalescer.run, handler)
+                # Run the coalescer in the session’s TaskGroup you already maintain
+                tg = self.session_task_group[session_id]
+                tg.start_soon(coalescer.run, handler)
 
         return SessionContext(manager=self, session_id=session_id)
 

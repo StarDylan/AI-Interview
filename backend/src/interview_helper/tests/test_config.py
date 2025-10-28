@@ -1,7 +1,7 @@
 import pytest
 from unittest.mock import patch
 from typing import cast
-from pydantic import ValidationError
+from pydantic import SecretStr, ValidationError
 
 from interview_helper.config import Settings
 
@@ -14,6 +14,9 @@ def test_settings_from_environment():
         "CORS_ALLOW_ORIGINS": "https://localhost:3000,https://example.com",
         "OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com",
         "OIDC_CLIENT_ID": "AWS-clientID",
+        "OPENAI_API_ENDPOINT": "https://endpoint.com",
+        "OPENAI_API_KEY": "sample_openai_api_key",
+        "AZURE_DEPLOYMENT": "gpt-5",
     }
 
     with patch.dict("os.environ", env_vars, clear=True):
@@ -42,6 +45,9 @@ def test_cors_origins_list_string_parsing():
             CORS_ALLOW_ORIGINS=origins_list,
             OIDC_AUTHORITY="test",
             OIDC_CLIENT_ID="client_id",
+            OPENAI_API_ENDPOINT="https://endpoint.com",
+            OPENAI_API_KEY=SecretStr("sample_openai_api_key"),
+            AZURE_DEPLOYMENT="gpt-5",
         )
         assert settings.cors_allow_origins == [origin1, origin2]
 
@@ -50,7 +56,13 @@ def test_empty_cors_origins_raises_error():
     """Test that empty CORS_ALLOW_ORIGINS raises ValueError"""
     with patch.dict("os.environ", {"CORS_ALLOW_ORIGINS": ""}, clear=True):
         with pytest.raises(ValueError, match="Missing.*CORS_ALLOW_ORIGINS"):
-            Settings(OIDC_AUTHORITY="", OIDC_CLIENT_ID="")
+            _ = Settings(
+                OIDC_AUTHORITY="",
+                OIDC_CLIENT_ID="",
+                OPENAI_API_ENDPOINT="",
+                OPENAI_API_KEY=SecretStr(""),
+                AZURE_DEPLOYMENT="",
+            )
 
 
 def test_split_origins_splits_comma_separated_string():
@@ -97,6 +109,9 @@ def test_settings_immutability():
             "CORS_ALLOW_ORIGINS": "https://localhost:3000",
             "OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com",
             "OIDC_CLIENT_ID": "AWS-clientID",
+            "OPENAI_API_ENDPOINT": "https://endpoint.com",
+            "OPENAI_API_KEY": "sample_openai_api_key",
+            "AZURE_DEPLOYMENT": "gpt-5",
         },
         clear=True,
     ):
