@@ -1,6 +1,6 @@
 import "@mantine/core/styles.css";
 
-import { MantineProvider } from "@mantine/core";
+import { MantineProvider, Container } from "@mantine/core";
 import { useAuth } from "react-oidc-context";
 import {
     BrowserRouter as Router,
@@ -8,8 +8,10 @@ import {
     Route,
     useLocation,
 } from "react-router-dom";
-import AppLayout from "./AppLayout";
 import AuthCallback from "./AuthCallback";
+import ProjectList from "./components/ProjectList";
+import AppLayout from "./AppLayout";
+import { AudioSender } from "./components/AudioSender";
 
 function AppContent() {
     const auth = useAuth();
@@ -69,10 +71,22 @@ function AppContent() {
         );
     }
 
-    // If user is authenticated, show the main app
+    // If user is authenticated, show the main app with routing
     if (auth.isAuthenticated) {
         return (
-            <AppLayout user={auth.user} onSignOut={() => auth.removeUser()} />
+            <AppLayout user={auth.user} onSignOut={() => auth.removeUser()}>
+                <Routes>
+                    <Route path="/" element={<ProjectList />} />
+                    <Route
+                        path="/project/:projectId"
+                        element={
+                            <Container fluid>
+                                <AudioSender />
+                            </Container>
+                        }
+                    />
+                </Routes>
+            </AppLayout>
         );
     }
 

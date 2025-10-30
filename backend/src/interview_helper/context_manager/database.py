@@ -1,16 +1,17 @@
 from collections.abc import Sequence
+from sqlalchemy.sql.sqltypes import DateTime
 from typing import TypedDict
 from interview_helper.context_manager.types import ProjectId, SessionId
 from interview_helper.context_manager.types import UserId
 from alembic.config import Config
 from alembic import command
 from pathlib import Path
-import sqlite_ulid
 import sqlalchemy as sa
 from sqlalchemy.event import listen as sa_listen
 from contextlib import contextmanager
 from dataclasses import dataclass
 import interview_helper.context_manager.models as models
+import sqlite_ulid
 
 
 class PersistentDatabase:
@@ -96,7 +97,9 @@ def get_user_by_id(db: PersistentDatabase, user_id: UserId) -> UserResult | None
         return None
 
 
-def get_or_add_user(db: PersistentDatabase, oidc_id: str, full_name: str) -> UserResult:
+def get_or_add_user_by_oidc_id(
+    db: PersistentDatabase, oidc_id: str, full_name: str
+) -> UserResult:
     """
     Get or add a user by oidc_id. Uses the existing name if found.
     """
@@ -178,44 +181,73 @@ def get_all_transcripts(db: PersistentDatabase, project_id: ProjectId) -> list[s
 class ProjectListing(TypedDict):
     id: str
     name: str
+    creator_name: str
+    created_at: str
 
 
 def get_all_projects(db: PersistentDatabase) -> Sequence[ProjectListing]:
     """
-    Gets all transcript results, sorted by creation date (ascending)
+    Gets all projects with creator name and creation date, sorted by creation date (descending)
     """
     with db.begin() as conn:
-        rows = (
+        rows: Sequence[tuple[str, str, str, DateTime]] = (
             conn.execute(
-                sa.select(models.Project.project_id, models.Project.name).order_by(
-                    models.Project.created_at.desc()
+                sa.select(
+                    models.Project.project_id,
+                    models.Project.name,
+                    models.User.full_name,
+                    models.Project.created_at,
                 )
+                .join(
+                    models.User, models.Project.creator_user_id == models.User.user_id
+                )
+                .order_by(models.Project.created_at.desc())
             )
             .tuples()
             .all()
         )
 
     projects: list[ProjectListing] = []
-    for id, name in rows:
-        projects.append({"id": id, "name": name})
+    for project_id, project_name, creator_name, created_at in rows:
+        projects.append(
+            {
+                "id": project_id,
+                "name": project_name,
+                "creator_name": creator_name,
+                "created_at": created_at.isoformat(),  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+            }
+        )
 
     return projects
 
 
 def create_new_project(
     db: PersistentDatabase, user_id: UserId, project_name: str
-) -> ProjectId:
+) -> ProjectListing:
     """
     Creates a new project and returns the project ID
     """
+    user = get_user_by_id(db, user_id)
+    assert user, (
+        f"User that doesn't exist (ID: {user_id}) is trying to create project: {project_name}"
+    )
+
     with db.begin() as conn:
-        result = conn.scalar(
-            sa.insert(models.Project).returning(models.Project.project_id),
+        result = conn.execute(
+            sa.insert(models.Project).returning(
+                models.Project.project_id, models.Project.created_at
+            ),
             {
-                "creator_user_id": str(user_id),
+                "creator_user_id": str(user.user_id),
                 "name": project_name,
             },
         )
 
-    assert result, f"Project not created in DB! name: {project_name}"
-    return ProjectId.from_str(result)
+        project_id, created_at = result.one().tuple()
+
+    return {
+        "id": project_id,
+        "name": project_name,
+        "creator_name": user.full_name,
+        "created_at": created_at.isoformat(),  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+    }

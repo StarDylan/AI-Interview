@@ -69,7 +69,6 @@ export function AudioSender() {
 
     const [transcript, setTranscript] = useState("");
 
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
     const [insights, setInsights] = useState<string[]>([]);
 
     const ws = useWebSocket();

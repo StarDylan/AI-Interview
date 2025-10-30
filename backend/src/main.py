@@ -37,7 +37,7 @@ from interview_helper.context_manager.database import (
     ProjectListing,
     create_new_project,
     get_all_projects,
-    get_or_add_user,
+    get_or_add_user_by_oidc_id,
 )
 
 from fastapi.security import OpenIdConnect
@@ -278,7 +278,9 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
 
         # Get / Create user in the database
         user_name = user_info.name or user_claims.name or "User"
-        db_user = get_or_add_user(session_manager.db, user_claims.sub, user_name)
+        db_user = get_or_add_user_by_oidc_id(
+            session_manager.db, user_claims.sub, user_name
+        )
 
         # Return the combined information
         return {
@@ -302,7 +304,9 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
 
         # Get / Create user in the database using basic claims
         user_name = user_claims.name or "User"
-        db_user = get_or_add_user(session_manager.db, user_claims.sub, user_name)
+        db_user = get_or_add_user_by_oidc_id(
+            session_manager.db, user_claims.sub, user_name
+        )
 
         return {
             "token": clean_token,
@@ -436,7 +440,7 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
 @app.get("/project")
 def list_all_projects():
     """
-    Returns all projects
+    Returns all projects with details
     """
     return get_all_projects(session_manager.db)
 
@@ -451,11 +455,15 @@ def create_project(
     clean_token = token.removeprefix("Bearer ")
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
 
-    project_id = create_new_project(
-        session_manager.db, UserId.from_str(user_claims.sub), project_name
+    user = get_or_add_user_by_oidc_id(
+        session_manager.db, user_claims.sub, user_claims.name or "No Name Found"
     )
 
-    return ProjectListing(id=str(project_id), name=project_name)
+    new_project: ProjectListing = create_new_project(
+        session_manager.db, user.user_id, project_name
+    )
+
+    return new_project
 
 
 if __name__ == "__main__":
