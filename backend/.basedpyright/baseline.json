@@ -29,14 +29,6 @@
                 "code": "reportUnannotatedClassAttribute",
                 "range": {
                     "startColumn": 13,
-                    "endColumn": 16,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportUnannotatedClassAttribute",
-                "range": {
-                    "startColumn": 13,
                     "endColumn": 15,
                     "lineCount": 1
                 }
@@ -878,14 +870,6 @@
             {
                 "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 39,
-                    "endColumn": 43,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportDeprecated",
-                "range": {
                     "startColumn": 44,
                     "endColumn": 53,
                     "lineCount": 1
@@ -904,14 +888,6 @@
                 "range": {
                     "startColumn": 48,
                     "endColumn": 56,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportDeprecated",
-                "range": {
-                    "startColumn": 22,
-                    "endColumn": 26,
                     "lineCount": 1
                 }
             },

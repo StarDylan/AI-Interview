@@ -1,10 +1,12 @@
+from collections.abc import Sequence
+from langchain_core.callbacks import BaseCallbackHandler
 from interview_helper.context_manager.messages import AIResultMessage
 from interview_helper.context_manager.resource_keys import WEBSOCKET
 from interview_helper.context_manager.types import AIResult, TranscriptId
 from interview_helper.context_manager.types import AIJob
 from interview_helper.context_manager.TextCoalescer import TextCoalescer
 from interview_helper.security.tickets import TicketStore
-from typing import Optional, Protocol, Type, runtime_checkable
+from typing import Optional, Protocol, runtime_checkable
 from collections import defaultdict
 from dataclasses import dataclass
 from ulid import ULID
@@ -35,7 +37,9 @@ type AsyncAudioConsumerFinalize = Callable[["SessionContext"], Awaitable[None]]
 @runtime_checkable
 class AIAnalyzer(Protocol):
     def __init__(self, config: Settings, db: PersistentDatabase): ...
-    async def analyze(self, job: AIJob) -> AIResult: ...
+    async def analyze(
+        self, job: AIJob, callbacks: Sequence[BaseCallbackHandler] | None = None
+    ) -> AIResult: ...
 
 
 logger = logging.getLogger(__name__)
@@ -112,7 +116,7 @@ class AppContextManager:
         audio_ingest_consumers: tuple[
             tuple[AsyncAudioConsumer, AsyncAudioConsumerFinalize], ...
         ],
-        ai_processer: Type[AIAnalyzer],
+        ai_processer: type[AIAnalyzer],
         settings: Settings | None = None,
     ):
         # We need to protect against race-conditions since our context might end up in an

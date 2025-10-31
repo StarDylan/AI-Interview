@@ -1,3 +1,6 @@
+from collections.abc import Sequence
+from typing import Final
+from langchain_core.callbacks import BaseCallbackHandler
 from interview_helper.config import Settings
 from interview_helper.context_manager.database import (
     PersistentDatabase,
@@ -43,13 +46,15 @@ class SimpleAnalyzer:
             azure_deployment=config.azure_deployment,
         )
 
-        self.llm = create_agent(
+        self.llm: Final = create_agent(
             llm, response_format=Analysis, system_prompt=self.SYSTEM_PROMPT
         )
 
         self.db = db
 
-    async def analyze(self, job: AIJob) -> AIResult:
+    async def analyze(
+        self, job: AIJob, callbacks: Sequence[BaseCallbackHandler] | None = None
+    ) -> AIResult:
         """Analyze a chunk and return suggestions.
 
         Args:
@@ -70,7 +75,8 @@ class SimpleAnalyzer:
         """)
 
         response = await self.llm.ainvoke(
-            {"messages": [{"role": "user", "content": prompt}]}
+            {"messages": [{"role": "user", "content": prompt}]},
+            {"callbacks": list(callbacks) if callbacks is not None else None},
         )
 
         analysis: Analysis = response["structured_response"]
@@ -99,7 +105,10 @@ class FakeAnalyzer:
     def __init__(self, config: Settings, db: PersistentDatabase):
         self.db = db
 
-    async def analyze(self, job: AIJob) -> AIResult:
+    async def analyze(
+        self, job: AIJob, callbacks: Sequence[BaseCallbackHandler] | None = None
+    ) -> AIResult:
+        _ = callbacks  # We don't use callbacks
         return AIResult(
             text=[
                 f"I am a dummy analyzer..., here is my input I got:\n {' '.join(get_all_transcripts(self.db, job.project_id))}"
