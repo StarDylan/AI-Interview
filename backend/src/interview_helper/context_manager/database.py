@@ -81,17 +81,17 @@ def get_user_by_id(db: PersistentDatabase, user_id: UserId) -> UserResult | None
     """
     with db.begin() as conn:
         result = conn.execute(
-            sa.text(
-                "SELECT user_id, full_name, oidc_id FROM users WHERE user_id = :user_id"
-            ),
-            {"user_id": str(user_id)},
+            sa.select(
+                models.User.user_id, models.User.full_name, models.User.oidc_id
+            ).where(models.User.user_id == str(user_id))
         ).one_or_none()
 
         if result is not None:
+            user_id_str, full_name, oidc_id = result.tuple()
             return UserResult(
-                user_id=UserId.from_str(result.user_id),
-                full_name=result.full_name,
-                oidc_id=result.oidc_id,
+                user_id=UserId.from_str(user_id_str),
+                full_name=full_name,
+                oidc_id=oidc_id,
             )
 
         return None
@@ -105,31 +105,30 @@ def get_or_add_user_by_oidc_id(
     """
     with db.begin() as conn:
         result = conn.execute(
-            sa.text("SELECT user_id, full_name FROM users WHERE oidc_id = :oidc_id"),
-            {"oidc_id": oidc_id},
+            sa.select(models.User.user_id, models.User.full_name).where(
+                models.User.oidc_id == oidc_id
+            )
         ).one_or_none()
 
         if result is not None:
+            user_id, full_name = result.tuple()
             return UserResult(
-                user_id=UserId.from_str(result.user_id),
-                full_name=result.full_name,
+                user_id=UserId.from_str(user_id),
+                full_name=full_name,
                 oidc_id=oidc_id,
             )
 
-        conn.execute(
-            sa.text(
-                "INSERT INTO users (full_name, oidc_id) VALUES (:full_name, :oidc_id)"
-            ),
-            {"full_name": full_name, "oidc_id": oidc_id},
+        (user_id,) = (
+            conn.execute(
+                sa.insert(models.User).returning(models.User.user_id),
+                {"full_name": full_name, "oidc_id": oidc_id},
+            )
+            .one()
+            .tuple()
         )
 
-        result = conn.execute(
-            sa.text("SELECT user_id FROM users WHERE oidc_id = :oidc_id"),
-            {"oidc_id": oidc_id},
-        ).one()
-
         return UserResult(
-            user_id=UserId.from_str(result.user_id),
+            user_id=UserId.from_str(user_id),
             full_name=full_name,
             oidc_id=oidc_id,
         )
