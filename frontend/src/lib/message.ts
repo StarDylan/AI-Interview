@@ -6,6 +6,8 @@ export const MessageType = {
     PONG: "pong",
     TRANSCRIPTION: "transcription",
     AI_RESULT: "ai_result",
+    CATCHUP: "catchup",
+    PROJECT_METADATA: "project_metadata",
 } as const;
 
 interface OfferMessage {
@@ -46,6 +48,20 @@ export interface AIResultMessage {
     text: string;
 }
 
+export interface CatchupMessage {
+    type: typeof MessageType.CATCHUP;
+    timestamp: string;
+    transcript: string;
+    insights: string[];
+}
+
+export interface ProjectMetadataMessage {
+    type: typeof MessageType.PROJECT_METADATA;
+    timestamp: string;
+    project_id: string;
+    project_name: string;
+}
+
 export type SignalingMessage =
     | OfferMessage
     | AnswerMessage
@@ -55,7 +71,9 @@ export type Message =
     | SignalingMessage
     | PingMessage
     | TranscriptionMessage
-    | AIResultMessage;
+    | AIResultMessage
+    | CatchupMessage
+    | ProjectMetadataMessage;
 
 export interface Envelope {
     message: Message;

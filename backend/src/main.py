@@ -1,11 +1,14 @@
 #!/usr/bin/env python3
 from contextlib import asynccontextmanager
-from interview_helper.ai_analysis.ai_analysis import SimpleAnalyzer
+from interview_helper.ai_analysis.ai_analysis import FakeAnalyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
-from interview_helper.context_manager.messages import PingMessage
+from interview_helper.context_manager.messages import (
+    PingMessage,
+    CatchupMessage,
+    ProjectMetadataMessage,
+)
 from starlette.responses import RedirectResponse
-from typing import Dict
 from interview_helper.security.http import (
     verify_jwt_token,
     get_user_info_from_oidc_provider,
@@ -34,7 +37,16 @@ from interview_helper.context_manager.resource_keys import WEBSOCKET
 from interview_helper.audio_stream_handler.audio_stream_handler import (
     handle_webrtc_message,
 )
-from interview_helper.context_manager.database import get_or_add_user
+from interview_helper.context_manager.database import (
+    ProjectListing,
+    create_new_project,
+    get_all_projects,
+    get_or_add_user_by_oidc_id,
+    get_project_by_id,
+    get_all_transcripts,
+    get_all_ai_analyses,
+)
+from interview_helper.context_manager.types import ProjectId
 
 from fastapi.security import OpenIdConnect
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
@@ -43,7 +55,7 @@ import uvicorn
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(), logging.FileHandler("transcription_server.log")],
 )
@@ -53,7 +65,7 @@ logger = logging.getLogger(__name__)
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
     (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
-    ai_processer=SimpleAnalyzer,
+    ai_processer=FakeAnalyzer,
     settings=Settings(),  # type: ignore (env vars)
 )
 
@@ -97,9 +109,9 @@ SCOPE = "openid profile email"
 
 FRONTEND_REDIRECT_URI = session_manager.get_settings().frontend_redirect_uri
 
-oidc_config = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
+oidc_config: dict[str, str] = httpx.get(OIDC_CONFIG_URL).raise_for_status().json()
 
-signing_algos = oidc_config.get("id_token_signing_alg_values_supported", [])
+signing_algos: str = oidc_config.get("id_token_signing_alg_values_supported", "")
 jwks_client = jwt.PyJWKClient(oidc_config["jwks_uri"])
 AUTHORIZATION_ENDPOINT = oidc_config["authorization_endpoint"]
 TOKEN_ENDPOINT = oidc_config["token_endpoint"]
@@ -116,7 +128,7 @@ async def root():
     return "Interview Helper Backend"
 
 
-active_states: Dict[str, tuple[str, str]] = {}
+active_states: dict[str, tuple[str, str]] = {}
 
 
 @app.get("/login")
@@ -274,7 +286,9 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
 
         # Get / Create user in the database
         user_name = user_info.name or user_claims.name or "User"
-        db_user = get_or_add_user(session_manager.db, user_claims.sub, user_name)
+        db_user = get_or_add_user_by_oidc_id(
+            session_manager.db, user_claims.sub, user_name
+        )
 
         # Return the combined information
         return {
@@ -298,7 +312,9 @@ async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
 
         # Get / Create user in the database using basic claims
         user_name = user_claims.name or "User"
-        db_user = get_or_add_user(session_manager.db, user_claims.sub, user_name)
+        db_user = get_or_add_user_by_oidc_id(
+            session_manager.db, user_claims.sub, user_name
+        )
 
         return {
             "token": clean_token,
@@ -365,17 +381,26 @@ async def secured(token: Annotated[str, Depends(oidc_scheme)]):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
+async def websocket_endpoint(
+    websocket: WebSocket, ticket_id: str | None, project_id: str | None = None
+):
     """
     WebSocket endpoint with ticket-based authentication.
 
     Clients should first obtain a ticket from /auth/ticket and then pass it
-    as a query parameter: /ws?ticket_id=<ticket_id>
+    as a query parameter: /ws?ticket_id=<ticket_id>&project_id=<project_id>
     """
     # Authenticate the WebSocket connection using ticket
     if not ticket_id:
         await websocket.close(code=1008, reason="Authentication ticket required")
         return
+
+    # Require project_id
+    if not project_id:
+        await websocket.close(code=1008, reason="Project ID required")
+        return
+    else:
+        project_id_typed = ProjectId.from_str(project_id)
 
     # Get client IP address
     if not websocket.client:
@@ -406,8 +431,16 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
         await websocket.close(code=1008, reason="Authentication failed")
         return
 
+    # Validate project exists
+    project = get_project_by_id(session_manager.db, project_id_typed)
+    if not project:
+        await websocket.close(code=1008, reason="Project not found")
+        return
+
     await websocket.accept()
-    context = await session_manager.new_session(user_id=ticket.user_id)
+    context = await session_manager.new_session(
+        user_id=ticket.user_id, project_id=project_id_typed
+    )
     print(f"Opened new session {context.session_id} for user {ticket.user_id}")
 
     cws = ConcurrentWebSocket(already_accepted_ws=websocket)
@@ -415,6 +448,26 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
     try:
         async with cws:
             await context.register(WEBSOCKET, cws)
+
+            # Send catchup message with current transcript and insights
+            transcripts = get_all_transcripts(session_manager.db, project_id_typed)
+            transcript_text = " ".join(transcripts)
+
+            ai_analyses = get_all_ai_analyses(session_manager.db, project_id_typed)
+            insights = [analysis for analysis in ai_analyses if analysis]
+
+            catchup_msg = CatchupMessage(
+                transcript=transcript_text,
+                insights=insights,
+            )
+            await cws.send_message(catchup_msg)
+
+            # Send project metadata
+            metadata_msg = ProjectMetadataMessage(
+                project_id=project["id"],
+                project_name=project["name"],
+            )
+            await cws.send_message(metadata_msg)
 
             while True:
                 message = await cws.receive_message()
@@ -427,6 +480,35 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
     except WebSocketDisconnect:
         await context.teardown()
         print(f"Closed session {context.session_id} for {ticket.user_id}")
+
+
+@app.get("/project")
+def list_all_projects():
+    """
+    Returns all projects with details
+    """
+    return get_all_projects(session_manager.db)
+
+
+@app.post("/project")
+def create_project(
+    project_name: str, token: Annotated[str, Depends(oidc_scheme)]
+) -> ProjectListing:
+    """
+    Creates a new project
+    """
+    clean_token = token.removeprefix("Bearer ")
+    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
+
+    user = get_or_add_user_by_oidc_id(
+        session_manager.db, user_claims.sub, user_claims.name or "No Name Found"
+    )
+
+    new_project: ProjectListing = create_new_project(
+        session_manager.db, user.user_id, project_name
+    )
+
+    return new_project
 
 
 if __name__ == "__main__":

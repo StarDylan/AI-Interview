@@ -1,77 +1,77 @@
-import { useState } from "react";
-import {
-    AppShell,
-    Container,
-    Group,
-    Text,
-    Avatar,
-    Burger,
-    Button,
-    Menu,
-    Tooltip,
-} from "@mantine/core";
+import { useState, useEffect } from "react";
+import type { ReactNode } from "react";
+import { AppShell, Group, Text, Avatar, Burger, Menu } from "@mantine/core";
 import { User } from "oidc-client-ts";
-import { AudioSender } from "./components/AudioSender";
-import { Ping } from "./components/Ping";
-import StatusDot from "./components/StatusDot";
-import { useWebSocket } from "./lib/useWebsocket";
+import { useParams, useNavigate } from "react-router-dom";
+import { useAuth } from "react-oidc-context";
+import { fetchProjects } from "./lib/api";
+import type { ProjectListing } from "./lib/api";
 
 interface AppLayoutProps {
     user?: User | null;
     onSignOut?: () => void;
+    children: ReactNode;
 }
 
-const navItems = [
-    { link: "home", label: "Home" },
-    { link: "profile", label: "Profile" },
-    { link: "settings", label: "Settings" },
-];
-
-export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
-    const [activeTab, setActiveTab] = useState<string | null>("Home");
-    const ws = useWebSocket();
+export default function AppLayout({
+    user,
+    onSignOut,
+    children,
+}: AppLayoutProps) {
+    const [currentProject, setCurrentProject] = useState<ProjectListing | null>(
+        null,
+    );
+    const { projectId } = useParams<{ projectId: string }>();
+    const auth = useAuth();
+    const navigate = useNavigate();
 
     // Extract user information from OIDC user object
     const userName =
         user?.profile?.name || user?.profile?.preferred_username || "User";
-    const userEmail = user?.profile?.email || "";
 
     // Use first letter of name for avatar if no image
     const avatarText = userName.charAt(0).toUpperCase();
+
+    useEffect(() => {
+        const loadProject = async () => {
+            if (!projectId) {
+                setCurrentProject(null);
+                return;
+            }
+
+            try {
+                const token = auth.user?.access_token;
+                if (!token) return;
+
+                const projects = await fetchProjects(token);
+                const project = projects.find((p) => p.id === projectId);
+                setCurrentProject(project || null);
+            } catch (err) {
+                console.error("Failed to load project:", err);
+            }
+        };
+
+        loadProject();
+    }, [projectId, auth.user?.access_token]);
 
     return (
         <AppShell header={{ height: 60 }} padding="md">
             <AppShell.Header px="md">
                 <Group h="100%" justify="space-between">
-                    <Group>
+                    <Group
+                        style={{ cursor: "pointer" }}
+                        onClick={() => navigate("/")}
+                    >
                         <Text fw={700} size="lg">
                             Interview Helper
                         </Text>
-                    </Group>
-                    <Group gap="sm" visibleFrom="sm">
-                        {navItems.map((item) => (
-                            <Button
-                                key={item.link}
-                                variant={
-                                    activeTab === item.link ? "light" : "subtle"
-                                }
-                                onClick={() => setActiveTab(item.link)}
-                            >
-                                {item.label}
-                            </Button>
-                        ))}
+                        {currentProject && (
+                            <Text size="sm" c="dimmed">
+                                / {currentProject.name}
+                            </Text>
+                        )}
                     </Group>
                     <Group visibleFrom="sm" gap="xs">
-                        <Tooltip
-                            label="Server Connection Status"
-                            arrowOffset={50}
-                            arrowSize={8}
-                            withArrow
-                        >
-                            <span>
-                                <StatusDot status={ws.connectionStatus} />
-                            </span>
-                        </Tooltip>
                         <Text fw={500} size="sm">
                             {userName}
                         </Text>
@@ -97,31 +97,7 @@ export default function AppLayout({ user, onSignOut }: AppLayoutProps) {
                 </Group>
             </AppShell.Header>
 
-            <AppShell.Main>
-                <Container fluid>
-                    <div style={{ padding: "2rem" }}>
-                        <h2>Welcome, {userName}!</h2>
-                        {userEmail && <p>Email: {userEmail}</p>}
-                        <p>
-                            You are successfully authenticated with Google OIDC.
-                            The main content of your application goes here.
-                        </p>
-
-                        <AudioSender />
-                        <Ping />
-
-                        <div style={{ marginTop: "2rem" }}>
-                            <Button
-                                onClick={onSignOut}
-                                variant="outline"
-                                color="red"
-                            >
-                                Sign Out
-                            </Button>
-                        </div>
-                    </div>
-                </Container>
-            </AppShell.Main>
+            <AppShell.Main>{children}</AppShell.Main>
         </AppShell>
     );
 }

@@ -1,15 +1,31 @@
 import "@mantine/core/styles.css";
 
-import { MantineProvider } from "@mantine/core";
+import { MantineProvider, Container } from "@mantine/core";
 import { useAuth } from "react-oidc-context";
 import {
     BrowserRouter as Router,
     Routes,
     Route,
     useLocation,
+    useParams,
 } from "react-router-dom";
-import AppLayout from "./AppLayout";
 import AuthCallback from "./AuthCallback";
+import ProjectList from "./components/ProjectList";
+import AppLayout from "./AppLayout";
+import { AudioSender } from "./components/AudioSender";
+import { WebSocketProvider } from "./lib/WebSocketProvider";
+
+function ProjectPage() {
+    const { projectId } = useParams<{ projectId: string }>();
+
+    return (
+        <WebSocketProvider projectId={projectId}>
+            <Container fluid>
+                <AudioSender />
+            </Container>
+        </WebSocketProvider>
+    );
+}
 
 function AppContent() {
     const auth = useAuth();
@@ -69,10 +85,18 @@ function AppContent() {
         );
     }
 
-    // If user is authenticated, show the main app
+    // If user is authenticated, show the main app with routing
     if (auth.isAuthenticated) {
         return (
-            <AppLayout user={auth.user} onSignOut={() => auth.removeUser()} />
+            <AppLayout user={auth.user} onSignOut={() => auth.removeUser()}>
+                <Routes>
+                    <Route path="/" element={<ProjectList />} />
+                    <Route
+                        path="/project/:projectId"
+                        element={<ProjectPage />}
+                    />
+                </Routes>
+            </AppLayout>
         );
     }
 

@@ -1,17 +1,21 @@
+from collections.abc import Sequence
+from typing import Final
+from langchain_core.callbacks import BaseCallbackHandler
 from interview_helper.config import Settings
 from interview_helper.context_manager.database import (
     PersistentDatabase,
     get_all_transcripts,
 )
-from interview_helper.context_manager.types import AIResult
-from interview_helper.context_manager.session_context_manager import AIJob
+from interview_helper.context_manager.types import AIJob, AIResult
 from langchain_openai import AzureChatOpenAI
 from langchain.agents import create_agent
 from pydantic import BaseModel
 from textwrap import dedent
-
+import logging
 
 """Simple interview analyzer with LLM."""
+
+logger = logging.getLogger(__name__)
 
 
 class Analysis(BaseModel):
@@ -44,13 +48,15 @@ class SimpleAnalyzer:
             azure_deployment=config.azure_deployment,
         )
 
-        self.llm = create_agent(
+        self.llm: Final = create_agent(
             llm, response_format=Analysis, system_prompt=self.SYSTEM_PROMPT
         )
 
         self.db = db
 
-    async def analyze(self, job: AIJob) -> AIResult:
+    async def analyze(
+        self, job: AIJob, callbacks: Sequence[BaseCallbackHandler] | None = None
+    ) -> AIResult:
         """Analyze a chunk and return suggestions.
 
         Args:
@@ -61,7 +67,9 @@ class SimpleAnalyzer:
             Analysis and suggestions from the LLM
         """
 
-        interview_transcript = " ".join(get_all_transcripts(self.db, job.session_id))
+        logger.info("Running Simple AI Analyzer")
+
+        interview_transcript = " ".join(get_all_transcripts(self.db, job.project_id))
 
         prompt = dedent(f"""\
             Current interview:
@@ -71,7 +79,8 @@ class SimpleAnalyzer:
         """)
 
         response = await self.llm.ainvoke(
-            {"messages": [{"role": "user", "content": prompt}]}
+            {"messages": [{"role": "user", "content": prompt}]},
+            {"callbacks": list(callbacks) if callbacks is not None else None},
         )
 
         analysis: Analysis = response["structured_response"]
@@ -100,9 +109,12 @@ class FakeAnalyzer:
     def __init__(self, config: Settings, db: PersistentDatabase):
         self.db = db
 
-    async def analyze(self, job: AIJob) -> AIResult:
+    async def analyze(
+        self, job: AIJob, callbacks: Sequence[BaseCallbackHandler] | None = None
+    ) -> AIResult:
+        _ = callbacks  # We don't use callbacks
         return AIResult(
             text=[
-                f"I am a dummy analyzer..., here is my input I got:\n {' '.join(get_all_transcripts(self.db, job.session_id))}"
+                f"I am a dummy analyzer..., here is my input I got:\n {' '.join(get_all_transcripts(self.db, job.project_id))}"
             ]
         )

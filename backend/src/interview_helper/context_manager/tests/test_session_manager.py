@@ -1,6 +1,6 @@
 from interview_helper.ai_analysis.ai_analysis import FakeAnalyzer
 from ulid import ULID
-from interview_helper.context_manager.types import UserId
+from interview_helper.context_manager.types import ProjectId, UserId
 import pytest
 import anyio
 
@@ -15,7 +15,9 @@ async def test_context_manager_maintains_individual_state():
     contextManager1 = AppContextManager((), ai_processer=FakeAnalyzer)
     contextManager2 = AppContextManager((), ai_processer=FakeAnalyzer)
 
-    ctx = await contextManager1.new_session(UserId(ULID()))
+    project_id = ProjectId(ULID())
+
+    ctx = await contextManager1.new_session(UserId(ULID()), project_id)
 
     with pytest.raises(AssertionError):
         # Not a valid context for contextManager2
@@ -30,7 +32,9 @@ async def test_content_manager_can_wait():
     test_resource_key1 = ResourceKey[str]("string")
     test_resource_key2 = ResourceKey[str]("string2")
     context_manager = AppContextManager((), FakeAnalyzer)
-    ctx = await context_manager.new_session(UserId(ULID()))
+    project_id = ProjectId(ULID())
+
+    ctx = await context_manager.new_session(UserId(ULID()), project_id)
 
     got = {}
 
@@ -70,7 +74,8 @@ async def test_content_manager_can_wait():
 async def test_content_manager_basic_can_wait():
     test_resource_key1 = ResourceKey[str]("string")
     context_manager = AppContextManager((), FakeAnalyzer)
-    ctx = await context_manager.new_session(UserId(ULID()))
+    project_id = ProjectId(ULID())
+    ctx = await context_manager.new_session(UserId(ULID()), project_id)
 
     # Test basic get_and_wait
     await ctx.register(test_resource_key1, "hello1")

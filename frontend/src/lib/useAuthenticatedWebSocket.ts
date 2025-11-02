@@ -15,7 +15,7 @@ import { useAuth } from "react-oidc-context";
 type MessageType = Message["type"];
 type MessageMap = { [K in MessageType]: Extract<Message, { type: K }> };
 
-export function useAuthenticatedWebSocket() {
+export function useAuthenticatedWebSocket(projectId?: string) {
     const [connectionStatus, setConnectionStatus] = useState<
         "disconnected" | "connecting" | "connected"
     >("disconnected");
@@ -93,8 +93,12 @@ export function useAuthenticatedWebSocket() {
 
             console.log("Obtained authentication ticket:", ticketId);
 
-            // Step 2: Create WebSocket connection with the ticket
-            const ws = new WebSocket(`${wsUrl}/ws?ticket_id=${ticketId}`);
+            // Step 2: Create WebSocket connection with the ticket and projectId
+            const wsParams = new URLSearchParams({ ticket_id: ticketId });
+            if (projectId) {
+                wsParams.append("project_id", projectId);
+            }
+            const ws = new WebSocket(`${wsUrl}/ws?${wsParams.toString()}`);
 
             ws.onopen = () => {
                 console.log(
@@ -178,16 +182,20 @@ export function useAuthenticatedWebSocket() {
     };
 
     // Connect on mount, disconnect on unmount
+    // Only connect if projectId is provided
     // eslint-disable-next-line react-hooks/exhaustive-deps
     useEffect(() => {
         if (auth.isLoading) {
             return; // Wait until we loaded auth
         }
+        if (!projectId) {
+            return; // Don't connect without a projectId
+        }
         connect();
         return () => {
             disconnect();
         };
-    }, [auth.isLoading]);
+    }, [auth.isLoading, projectId]);
 
     return {
         connectionStatus,

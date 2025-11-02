@@ -1,5 +1,5 @@
 from interview_helper.context_manager.database import get_user_by_id
-from interview_helper.context_manager.database import get_or_add_user
+from interview_helper.context_manager.database import get_or_add_user_by_oidc_id
 from interview_helper.context_manager.database import PersistentDatabase
 import sqlalchemy as sa
 import pytest
@@ -26,9 +26,9 @@ def test_user_addition():
     test_user_name = "Test User"
     oidc_id = "test-oidc-id"
 
-    added_user = get_or_add_user(db, oidc_id, test_user_name)
+    added_user = get_or_add_user_by_oidc_id(db, oidc_id, test_user_name)
 
-    added_user3 = get_or_add_user(db, oidc_id, "another_name")
+    added_user3 = get_or_add_user_by_oidc_id(db, oidc_id, "another_name")
     added_user2 = get_user_by_id(db, added_user.user_id)
 
     assert added_user2 is not None

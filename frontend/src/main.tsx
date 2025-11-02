@@ -5,7 +5,6 @@ import "normalize.css";
 import App from "./App.tsx";
 import { AuthProvider } from "react-oidc-context";
 import { OIDC_AUTHORITY, OIDC_CLIENT_ID, SITE_URL } from "./constants.ts";
-import { WebSocketProvider } from "./lib/WebSocketProvider.tsx";
 
 const oidc_config = {
     authority: OIDC_AUTHORITY,
@@ -18,9 +17,7 @@ const oidc_config = {
 createRoot(document.getElementById("root")!).render(
     <StrictMode>
         <AuthProvider {...oidc_config}>
-            <WebSocketProvider>
-                <App />
-            </WebSocketProvider>
+            <App />
         </AuthProvider>
     </StrictMode>,
 );

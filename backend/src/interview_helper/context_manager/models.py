@@ -14,7 +14,7 @@ class Base(DeclarativeBase):
 
 
 class User(Base):
-    __tablename__ = "users"
+    __tablename__: str = "users"
     user_id: Mapped[str] = mapped_column(
         sa.String(26), primary_key=True, server_default=text("ulid()")
     )
@@ -27,20 +27,20 @@ class User(Base):
         onupdate=sa.func.now(),
     )
 
-    def __repr__(self) -> str:
-        return f"User(user_id={self.user_id!r}, full_name={self.full_name!r})"
-
 
 class Transcription(Base):
-    __tablename__ = "transcriptions"
+    __tablename__: str = "transcriptions"
 
     transcription_id: Mapped[str] = mapped_column(
         sa.String(26), primary_key=True, server_default=text("ulid()")
     )
+    project_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("project.project_id"), nullable=False
+    )
+
     user_id: Mapped[str] = mapped_column(
         sa.String(26), ForeignKey("users.user_id"), nullable=False
     )
-    session_id: Mapped[str] = mapped_column(sa.String(26), nullable=False)
 
     text_output: Mapped[str] = mapped_column(sa.Text, nullable=True)
     created_at: Mapped[DateTime] = mapped_column(
@@ -54,3 +54,42 @@ class Transcription(Base):
     )
 
     user: Mapped["User"] = relationship(backref="transcriptions")
+
+
+class AIAnalysis(Base):
+    __tablename__: str = "ai_analyses"
+
+    analysis_id: Mapped[str] = mapped_column(
+        sa.String(26), primary_key=True, server_default=text("ulid()")
+    )
+
+    project_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("project.project_id"), nullable=False
+    )
+
+    text: Mapped[str] = mapped_column(sa.Text, nullable=False)
+
+
+class Project(Base):
+    __tablename__: str = "project"
+
+    project_id: Mapped[str] = mapped_column(
+        sa.String(26), primary_key=True, server_default=text("ulid()")
+    )
+
+    name: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
+    creator_user_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("users.user_id"), nullable=False
+    )
+
+    created_at: Mapped[DateTime] = mapped_column(
+        sa.DateTime, nullable=False, server_default=sa.func.now()
+    )
+
+    updated_at: Mapped[DateTime] = mapped_column(
+        sa.DateTime,
+        nullable=False,
+        server_default=sa.func.now(),
+        onupdate=sa.func.now(),
+    )
