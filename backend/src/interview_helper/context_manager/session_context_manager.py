@@ -6,7 +6,7 @@ from interview_helper.context_manager.types import AIResult, TranscriptId
 from interview_helper.context_manager.types import AIJob
 from interview_helper.context_manager.TextCoalescer import TextCoalescer
 from interview_helper.security.tickets import TicketStore
-from typing import Optional, Protocol, runtime_checkable
+from typing import Protocol, runtime_checkable
 from collections import defaultdict
 from dataclasses import dataclass
 from ulid import ULID
@@ -24,7 +24,10 @@ from interview_helper.context_manager.types import (
     ResourceKey,
 )
 from interview_helper.audio_stream_handler.types import AudioChunk
-from interview_helper.context_manager.database import PersistentDatabase
+from interview_helper.context_manager.database import (
+    PersistentDatabase,
+    add_ai_analysis,
+)
 import logging
 
 T = TypeVar("T", covariant=True)
@@ -49,6 +52,7 @@ logger = logging.getLogger(__name__)
 class SessionContext:
     manager: "AppContextManager"
     session_id: SessionId
+    project_id: ProjectId
 
     async def register(self, key: ResourceKey[T], value: T) -> None:
         """
@@ -62,7 +66,7 @@ class SessionContext:
             session_id=self.session_id, key=key, value=value
         )
 
-    async def get(self, key: ResourceKey[T]) -> Optional[T]:
+    async def get(self, key: ResourceKey[T]) -> T | None:
         """
         Gets the resource associated with the key
 
@@ -82,7 +86,9 @@ class SessionContext:
 
     async def ingest_audio(self, audio_chunk: AudioChunk):
         await self.manager.ingest_audio(
-            session_id=self.session_id, audio_chunk=audio_chunk
+            session_id=self.session_id,
+            project_id=self.project_id,
+            audio_chunk=audio_chunk,
         )
 
     async def teardown(self):
@@ -163,13 +169,14 @@ class AppContextManager:
         self._workers_started = False
         self.text_coalescer: dict[SessionId, TextCoalescer] = {}
 
-    async def new_session(self, user_id: UserId) -> SessionContext:
+    async def new_session(
+        self, user_id: UserId, project_id: ProjectId
+    ) -> SessionContext:
         session_id = SessionId(ULID())
 
         async with self.lock:
-            # FIXME: Right now we treat every user on the same project.
             self.session_data[session_id] = AppContextManager.SessionData(
-                project=GLOBAL_PROJECT, user=user_id
+                project=project_id, user=user_id
             )
 
             self.session_task_group[
@@ -190,15 +197,15 @@ class AppContextManager:
                 self.text_coalescer[session_id] = coalescer
 
                 async def handler(_transcript_id: TranscriptId) -> None:
-                    await self._submit_ai_processing_job(
-                        AIJob(project_id=GLOBAL_PROJECT)
-                    )
+                    await self._submit_ai_processing_job(AIJob(project_id=project_id))
 
                 # Run the coalescer in the session’s TaskGroup you already maintain
                 tg = self.session_task_group[session_id]
                 tg.start_soon(coalescer.run, handler)
 
-        return SessionContext(manager=self, session_id=session_id)
+        return SessionContext(
+            manager=self, session_id=session_id, project_id=project_id
+        )
 
     def get_settings(self) -> Settings:
         # Initing settings causes Env lookups, we make sure that doesn't happen
@@ -229,7 +236,7 @@ class AppContextManager:
             if k in self.waiting_events:
                 self.waiting_events[k].set()
 
-    async def get(self, session_id: SessionId, key: ResourceKey[T]) -> Optional[T]:
+    async def get(self, session_id: SessionId, key: ResourceKey[T]) -> T | None:
         """
         Gets the resource associated with the key
 
@@ -313,8 +320,10 @@ class AppContextManager:
 
         await task_group.__aexit__(None, None, None)
 
-    async def ingest_audio(self, session_id: SessionId, audio_chunk: AudioChunk):
-        ctx = SessionContext(self, session_id)
+    async def ingest_audio(
+        self, session_id: SessionId, project_id: ProjectId, audio_chunk: AudioChunk
+    ):
+        ctx = SessionContext(self, session_id, project_id)
         for consumer, _ in self.audio_ingest_consumers:
             await consumer(ctx, audio_chunk)
 
@@ -365,6 +374,8 @@ class AppContextManager:
 
         self._workers_started = True
 
+        logger.info("AI Workers Started")
+
     async def _worker(
         self, name: str, recv: anyio.abc.ObjectReceiveStream[AIJob]
     ) -> None:
@@ -372,6 +383,7 @@ class AppContextManager:
             # Jobs are simply to "poke" the AI engine that data is incoming.
             # If it is already running that is fine, there will always be another "poke"
             async for job in recv:
+                logger.info(f"Attempting to Run AI Job: {job}")
                 try:
                     if self.active_ai_analysis[job.project_id].locked():
                         continue
@@ -381,17 +393,26 @@ class AppContextManager:
                         )
                         results = await self.ai_processor.analyze(job)
 
+                    for result in results.text:
+                        add_ai_analysis(self.db, project_id=job.project_id, text=result)
+
+                    logger.info(results)
+
                     sessions: set[SessionId] = set()
                     for session, data in self.session_data.items():
+                        logger.info(f"{session} {data}")
                         if data.project == job.project_id:
                             sessions.add(session)
 
+                    logger.info(sessions)
                     for session in sessions:
                         if session in self.active_sessions:
                             ws = await self.get(session, WEBSOCKET)
                             if ws:
                                 for result in results.text:
+                                    # TODO: Make these messages idempotent so we don't get duplicated.
                                     await ws.send_message(AIResultMessage(text=result))
+                                    logger.info(f"Sending {result} to {session}")
 
                 except Exception:
                     # Never let an exception kill the worker or the service TG

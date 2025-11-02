@@ -758,14 +758,6 @@
             {
                 "code": "reportDeprecated",
                 "range": {
-                    "startColumn": 19,
-                    "endColumn": 27,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportDeprecated",
-                "range": {
                     "startColumn": 44,
                     "endColumn": 53,
                     "lineCount": 1
@@ -776,14 +768,6 @@
                 "range": {
                     "startColumn": 7,
                     "endColumn": 27,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportDeprecated",
-                "range": {
-                    "startColumn": 48,
-                    "endColumn": 56,
                     "lineCount": 1
                 }
             },
@@ -832,14 +816,6 @@
                 "range": {
                     "startColumn": 13,
                     "endColumn": 29,
-                    "lineCount": 1
-                }
-            },
-            {
-                "code": "reportDeprecated",
-                "range": {
-                    "startColumn": 71,
-                    "endColumn": 79,
                     "lineCount": 1
                 }
             },
@@ -939,14 +915,6 @@
             }
         ],
         "./src/interview_helper/context_manager/types.py": [
-            {
-                "code": "reportImplicitOverride",
-                "range": {
-                    "startColumn": 8,
-                    "endColumn": 15,
-                    "lineCount": 1
-                }
-            },
             {
                 "code": "reportAny",
                 "range": {

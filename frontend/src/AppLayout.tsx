@@ -1,19 +1,9 @@
 import { useState, useEffect } from "react";
 import type { ReactNode } from "react";
-import {
-    AppShell,
-    Group,
-    Text,
-    Avatar,
-    Burger,
-    Menu,
-    Tooltip,
-} from "@mantine/core";
+import { AppShell, Group, Text, Avatar, Burger, Menu } from "@mantine/core";
 import { User } from "oidc-client-ts";
 import { useParams, useNavigate } from "react-router-dom";
 import { useAuth } from "react-oidc-context";
-import StatusDot from "./components/StatusDot";
-import { useWebSocket } from "./lib/useWebsocket";
 import { fetchProjects } from "./lib/api";
 import type { ProjectListing } from "./lib/api";
 
@@ -33,7 +23,6 @@ export default function AppLayout({
     );
     const { projectId } = useParams<{ projectId: string }>();
     const auth = useAuth();
-    const ws = useWebSocket();
     const navigate = useNavigate();
 
     // Extract user information from OIDC user object
@@ -83,16 +72,6 @@ export default function AppLayout({
                         )}
                     </Group>
                     <Group visibleFrom="sm" gap="xs">
-                        <Tooltip
-                            label="Server Connection Status"
-                            arrowOffset={50}
-                            arrowSize={8}
-                            withArrow
-                        >
-                            <span>
-                                <StatusDot status={ws.connectionStatus} />
-                            </span>
-                        </Tooltip>
                         <Text fw={500} size="sm">
                             {userName}
                         </Text>

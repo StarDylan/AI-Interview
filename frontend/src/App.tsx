@@ -7,11 +7,25 @@ import {
     Routes,
     Route,
     useLocation,
+    useParams,
 } from "react-router-dom";
 import AuthCallback from "./AuthCallback";
 import ProjectList from "./components/ProjectList";
 import AppLayout from "./AppLayout";
 import { AudioSender } from "./components/AudioSender";
+import { WebSocketProvider } from "./lib/WebSocketProvider";
+
+function ProjectPage() {
+    const { projectId } = useParams<{ projectId: string }>();
+
+    return (
+        <WebSocketProvider projectId={projectId}>
+            <Container fluid>
+                <AudioSender />
+            </Container>
+        </WebSocketProvider>
+    );
+}
 
 function AppContent() {
     const auth = useAuth();
@@ -79,11 +93,7 @@ function AppContent() {
                     <Route path="/" element={<ProjectList />} />
                     <Route
                         path="/project/:projectId"
-                        element={
-                            <Container fluid>
-                                <AudioSender />
-                            </Container>
-                        }
+                        element={<ProjectPage />}
                     />
                 </Routes>
             </AppLayout>

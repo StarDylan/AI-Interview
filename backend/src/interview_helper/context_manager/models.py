@@ -63,7 +63,11 @@ class AIAnalysis(Base):
         sa.String(26), primary_key=True, server_default=text("ulid()")
     )
 
-    text: Mapped[str] = mapped_column(sa.Text, nullable=True)
+    project_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("project.project_id"), nullable=False
+    )
+
+    text: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
 
 class Project(Base):

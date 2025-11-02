@@ -42,12 +42,28 @@ class PingMessage(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
 
 
+class CatchupMessage(BaseModel):
+    type: Literal["catchup"] = "catchup"
+    timestamp: datetime = Field(default_factory=datetime.now)
+    transcript: str
+    insights: list[str]
+
+
+class ProjectMetadataMessage(BaseModel):
+    type: Literal["project_metadata"] = "project_metadata"
+    timestamp: datetime = Field(default_factory=datetime.now)
+    project_id: str
+    project_name: str
+
+
 WebSocketMessage = Union[
     ErrorMessage,
     TranscriptionMessage,
     WebRTCMessage,
     PingMessage,
     AIResultMessage,
+    CatchupMessage,
+    ProjectMetadataMessage,
 ]
 
 

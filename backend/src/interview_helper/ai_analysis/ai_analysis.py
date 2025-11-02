@@ -11,9 +11,11 @@ from langchain_openai import AzureChatOpenAI
 from langchain.agents import create_agent
 from pydantic import BaseModel
 from textwrap import dedent
-
+import logging
 
 """Simple interview analyzer with LLM."""
+
+logger = logging.getLogger(__name__)
 
 
 class Analysis(BaseModel):
@@ -64,6 +66,8 @@ class SimpleAnalyzer:
         Returns:
             Analysis and suggestions from the LLM
         """
+
+        logger.info("Running Simple AI Analyzer")
 
         interview_transcript = " ".join(get_all_transcripts(self.db, job.project_id))
 

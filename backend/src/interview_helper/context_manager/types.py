@@ -35,12 +35,17 @@ class ResourceKey(Generic[T]):
 #
 ## New Types
 #
-@dataclass
+@dataclass(frozen=True)
 class UserId:
     _user_id: ULID
 
+    @override
     def __str__(self):
         return str(self._user_id).lower()
+
+    @override
+    def __hash__(self):
+        return hash(self._user_id)
 
     @classmethod
     def from_str(cls, user_id: str) -> "UserId":
@@ -50,7 +55,7 @@ class UserId:
 SessionId = NewType("SessionId", ULID)
 
 
-@dataclass
+@dataclass(frozen=True)
 class ProjectId:
     _project_id: ULID
 
@@ -63,13 +68,17 @@ class ProjectId:
         return cls(_project_id=cast(ULID, ULID.from_str(project_id.upper())))
 
 
-@dataclass
+@dataclass(frozen=True)
 class TranscriptId:
     _transcript_id: ULID
 
     @override
     def __str__(self):
         return str(self._transcript_id).lower()
+
+    @override
+    def __hash__(self):
+        return hash(self._transcript_id)
 
     @classmethod
     def from_str(cls, transcript_id: str) -> "TranscriptId":

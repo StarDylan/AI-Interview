@@ -135,7 +135,11 @@ def get_or_add_user_by_oidc_id(
 
 
 def add_transcription(
-    db: PersistentDatabase, user_id: UserId, session_id: SessionId, text: str
+    db: PersistentDatabase,
+    user_id: UserId,
+    session_id: SessionId,
+    project_id: ProjectId,
+    text: str,
 ) -> str:
     """
     Adds a transcription result, returns the transcription ID
@@ -148,6 +152,7 @@ def add_transcription(
             {
                 "user_id": str(user_id),
                 "session_id": str(session_id),
+                "project_id": str(project_id),
                 "text_output": text,
             },
         )
@@ -158,7 +163,6 @@ def add_transcription(
     return result
 
 
-# TODO: Really should be by-project
 def get_all_transcripts(db: PersistentDatabase, project_id: ProjectId) -> list[str]:
     """
     Gets all transcript results, sorted by creation date (ascending)
@@ -250,3 +254,72 @@ def create_new_project(
         "creator_name": user.full_name,
         "created_at": created_at.isoformat(),  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
     }
+
+
+def get_project_by_id(
+    db: PersistentDatabase, project_id: ProjectId
+) -> ProjectListing | None:
+    """
+    Gets a single project by ID with creator information
+    """
+    with db.begin() as conn:
+        result = conn.execute(
+            sa.select(
+                models.Project.project_id,
+                models.Project.name,
+                models.User.full_name,
+                models.Project.created_at,
+            )
+            .join(models.User, models.Project.creator_user_id == models.User.user_id)
+            .where(models.Project.project_id == str(project_id))
+        ).one_or_none()
+
+        if result is None:
+            return None
+
+        project_id_str, project_name, creator_name, created_at = result.tuple()
+
+        return {
+            "id": project_id_str,
+            "name": project_name,
+            "creator_name": creator_name,
+            "created_at": created_at.isoformat(),  # pyright: ignore[reportAttributeAccessIssue, reportUnknownMemberType]
+        }
+
+
+def get_all_ai_analyses(db: PersistentDatabase, project_id: ProjectId) -> list[str]:
+    """
+    Gets all AI analysis results for a project, sorted by creation date (ascending)
+    Note: Currently AIAnalysis table doesn't have project_id or created_at fields.
+    This is a placeholder implementation that returns all analyses.
+    """
+    with db.begin() as conn:
+        rows = (
+            conn.execute(
+                sa.select(models.AIAnalysis.text)
+                .order_by(models.AIAnalysis.analysis_id.asc())
+                .where(models.AIAnalysis.project_id == str(project_id))
+            )
+            .scalars()
+            .all()
+        )
+
+    return list(rows)
+
+
+def add_ai_analysis(
+    db: PersistentDatabase,
+    project_id: ProjectId,
+    text: str,
+):
+    """
+    Adds a transcription result, returns the transcription ID
+    """
+    with db.begin() as conn:
+        _ = conn.execute(
+            sa.insert(models.AIAnalysis),
+            {
+                "project_id": str(project_id),
+                "text": text,
+            },
+        )

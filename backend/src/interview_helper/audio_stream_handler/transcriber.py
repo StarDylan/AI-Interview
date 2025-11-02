@@ -57,7 +57,13 @@ async def accept_transcript(ctx: SessionContext, text: str, ws: ConcurrentWebSoc
     await ws.send_message(TranscriptionMessage(type="transcription", text=text))
 
     added_transcription_id = TranscriptId.from_str(
-        add_transcription(ctx.manager.db, ctx.get_user_id(), ctx.session_id, text)
+        add_transcription(
+            ctx.manager.db,
+            user_id=ctx.get_user_id(),
+            session_id=ctx.session_id,
+            project_id=ctx.project_id,
+            text=text,
+        )
     )
 
     await ctx.accept_transcript(text, added_transcription_id)

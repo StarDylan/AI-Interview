@@ -1,9 +1,13 @@
 #!/usr/bin/env python3
 from contextlib import asynccontextmanager
-from interview_helper.ai_analysis.ai_analysis import SimpleAnalyzer
+from interview_helper.ai_analysis.ai_analysis import FakeAnalyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
-from interview_helper.context_manager.messages import PingMessage
+from interview_helper.context_manager.messages import (
+    PingMessage,
+    CatchupMessage,
+    ProjectMetadataMessage,
+)
 from starlette.responses import RedirectResponse
 from interview_helper.security.http import (
     verify_jwt_token,
@@ -38,7 +42,11 @@ from interview_helper.context_manager.database import (
     create_new_project,
     get_all_projects,
     get_or_add_user_by_oidc_id,
+    get_project_by_id,
+    get_all_transcripts,
+    get_all_ai_analyses,
 )
+from interview_helper.context_manager.types import ProjectId
 
 from fastapi.security import OpenIdConnect
 from fastapi import FastAPI, WebSocket, Depends, HTTPException, status
@@ -47,7 +55,7 @@ import uvicorn
 
 # Configure logging
 logging.basicConfig(
-    level=logging.WARNING,
+    level=logging.INFO,
     format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
     handlers=[logging.StreamHandler(), logging.FileHandler("transcription_server.log")],
 )
@@ -57,7 +65,7 @@ logger = logging.getLogger(__name__)
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
     (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
-    ai_processer=SimpleAnalyzer,
+    ai_processer=FakeAnalyzer,
     settings=Settings(),  # type: ignore (env vars)
 )
 
@@ -373,17 +381,26 @@ async def secured(token: Annotated[str, Depends(oidc_scheme)]):
 
 
 @app.websocket("/ws")
-async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
+async def websocket_endpoint(
+    websocket: WebSocket, ticket_id: str | None, project_id: str | None = None
+):
     """
     WebSocket endpoint with ticket-based authentication.
 
     Clients should first obtain a ticket from /auth/ticket and then pass it
-    as a query parameter: /ws?ticket_id=<ticket_id>
+    as a query parameter: /ws?ticket_id=<ticket_id>&project_id=<project_id>
     """
     # Authenticate the WebSocket connection using ticket
     if not ticket_id:
         await websocket.close(code=1008, reason="Authentication ticket required")
         return
+
+    # Require project_id
+    if not project_id:
+        await websocket.close(code=1008, reason="Project ID required")
+        return
+    else:
+        project_id_typed = ProjectId.from_str(project_id)
 
     # Get client IP address
     if not websocket.client:
@@ -414,8 +431,16 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
         await websocket.close(code=1008, reason="Authentication failed")
         return
 
+    # Validate project exists
+    project = get_project_by_id(session_manager.db, project_id_typed)
+    if not project:
+        await websocket.close(code=1008, reason="Project not found")
+        return
+
     await websocket.accept()
-    context = await session_manager.new_session(user_id=ticket.user_id)
+    context = await session_manager.new_session(
+        user_id=ticket.user_id, project_id=project_id_typed
+    )
     print(f"Opened new session {context.session_id} for user {ticket.user_id}")
 
     cws = ConcurrentWebSocket(already_accepted_ws=websocket)
@@ -423,6 +448,26 @@ async def websocket_endpoint(websocket: WebSocket, ticket_id: str | None):
     try:
         async with cws:
             await context.register(WEBSOCKET, cws)
+
+            # Send catchup message with current transcript and insights
+            transcripts = get_all_transcripts(session_manager.db, project_id_typed)
+            transcript_text = " ".join(transcripts)
+
+            ai_analyses = get_all_ai_analyses(session_manager.db, project_id_typed)
+            insights = [analysis for analysis in ai_analyses if analysis]
+
+            catchup_msg = CatchupMessage(
+                transcript=transcript_text,
+                insights=insights,
+            )
+            await cws.send_message(catchup_msg)
+
+            # Send project metadata
+            metadata_msg = ProjectMetadataMessage(
+                project_id=project["id"],
+                project_name=project["name"],
+            )
+            await cws.send_message(metadata_msg)
 
             while True:
                 message = await cws.receive_message()

@@ -26,6 +26,8 @@ import {
     MessageType,
     type AIResultMessage,
     type TranscriptionMessage,
+    type CatchupMessage,
+    type ProjectMetadataMessage,
 } from "../lib/message";
 
 // Optional: a tiny Insights panel component so we keep the page clean
@@ -70,6 +72,7 @@ export function AudioSender() {
     const [transcript, setTranscript] = useState("");
 
     const [insights, setInsights] = useState<string[]>([]);
+    const [projectName, setProjectName] = useState<string | null>(null);
 
     const ws = useWebSocket();
 
@@ -160,6 +163,33 @@ export function AudioSender() {
         };
     }, [ws]);
 
+    // Register Catchup Message
+    useEffect(() => {
+        const handleCatchup = (message: CatchupMessage) => {
+            setTranscript(message.transcript);
+            setInsights(message.insights);
+        };
+
+        ws.registerMessageHandler("catchup", handleCatchup);
+
+        return () => {
+            ws.deregisterMessageHandler("catchup");
+        };
+    }, [ws]);
+
+    // Register Project Metadata Message
+    useEffect(() => {
+        const handleProjectMetadata = (message: ProjectMetadataMessage) => {
+            setProjectName(message.project_name);
+        };
+
+        ws.registerMessageHandler("project_metadata", handleProjectMetadata);
+
+        return () => {
+            ws.deregisterMessageHandler("project_metadata");
+        };
+    }, [ws]);
+
     // (Optional) Example: if later you emit insight messages from the server,
     // register a handler here. For now, this just shows how to wire it up.
     // useEffect(() => {
@@ -231,7 +261,11 @@ export function AudioSender() {
                     <Stack gap="xs" style={{ height: "100%" }}>
                         <Group justify="space-between" p="md" pb={0}>
                             <Group gap="xs">
-                                <Title order={4}>Transcript</Title>
+                                <Title order={4}>
+                                    {projectName != null
+                                        ? `${projectName} - Transcript`
+                                        : "Transcript"}
+                                </Title>
                                 {isConnected && <Badge color="red">Live</Badge>}
                             </Group>
                             <Text size="sm" c={statusColor}>
