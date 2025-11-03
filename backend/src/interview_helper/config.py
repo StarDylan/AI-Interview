@@ -57,6 +57,8 @@ class Settings(BaseSettings):
     azure_api_version: str = "2024-12-01-preview"
     azure_deployment: str = Field(alias="AZURE_DEPLOYMENT")
 
+    azure_eval_deployment: str = Field(alias="AZURE_EVAL_DEPLOYMENT")
+
     # File paths
     vosk_model_path: Path = Field(
         default=Path("vosk_models") / "vosk-model-small-en-us-0.15"

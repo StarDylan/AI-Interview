@@ -128,6 +128,14 @@ See an interactive diagram of the architecture:
 docker run -it --rm -p 8080:8080 -v docs:/usr/local/structurizr structurizr/lite
 ```
 
+### LLM Eval Tests
+
+To run the LLM eval tests, in the `backend/` dir run:
+
+```
+uv run deepeval test run -m "llm"  .\src\interview_helper\ai_analysis\eval\test_example.py
+```
+
 ## Features
 
 - **Real-time Audio Processing:** WebRTC-based audio capture and streaming

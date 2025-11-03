@@ -38,6 +38,13 @@ exclude = [
 [[tool.basedpyright.executionEnvironments]]
 root = "backend/src"
 
+# Ensure we don't run llm tests (expensive)
+[tool.pytest.ini_options]
+addopts = "-m \"not llm\""
+markers = [
+    "llm: marks tests that use LLM evaluation (run with `uv run deepeval run test`)",
+]
+
 [dependency-groups]
 dev = [
     "basedpyright>=1.32.1",
