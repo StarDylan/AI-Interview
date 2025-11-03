@@ -115,6 +115,7 @@ def test_settings_immutability():
             "OPENAI_API_ENDPOINT": "https://endpoint.com",
             "OPENAI_API_KEY": "sample_openai_api_key",
             "AZURE_DEPLOYMENT": "gpt-5",
+            "AZURE_EVAL_DEPLOYMENT": "gpt-4o-mini",
         },
         clear=True,
     ):
