@@ -17,6 +17,7 @@ def test_settings_from_environment():
         "OPENAI_API_ENDPOINT": "https://endpoint.com",
         "OPENAI_API_KEY": "sample_openai_api_key",
         "AZURE_DEPLOYMENT": "gpt-5",
+        "AZURE_EVAL_DEPLOYMENT": "gpt-4o-mini",
     }
 
     with patch.dict("os.environ", env_vars, clear=True):
@@ -48,6 +49,7 @@ def test_cors_origins_list_string_parsing():
             OPENAI_API_ENDPOINT="https://endpoint.com",
             OPENAI_API_KEY=SecretStr("sample_openai_api_key"),
             AZURE_DEPLOYMENT="gpt-5",
+            AZURE_EVAL_DEPLOYMENT="gpt-4o-mini",
         )
         assert settings.cors_allow_origins == [origin1, origin2]
 
@@ -62,6 +64,7 @@ def test_empty_cors_origins_raises_error():
                 OPENAI_API_ENDPOINT="",
                 OPENAI_API_KEY=SecretStr(""),
                 AZURE_DEPLOYMENT="",
+                AZURE_EVAL_DEPLOYMENT="gpt-4o-mini",
             )
 
 

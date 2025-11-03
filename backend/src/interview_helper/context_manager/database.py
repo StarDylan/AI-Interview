@@ -80,14 +80,18 @@ def get_user_by_id(db: PersistentDatabase, user_id: UserId) -> UserResult | None
     Returns the user given their user_id
     """
     with db.begin() as conn:
-        result = conn.execute(
-            sa.select(
-                models.User.user_id, models.User.full_name, models.User.oidc_id
-            ).where(models.User.user_id == str(user_id))
-        ).one_or_none()
+        result = (
+            conn.execute(
+                sa.select(
+                    models.User.user_id, models.User.full_name, models.User.oidc_id
+                ).where(models.User.user_id == str(user_id))
+            )
+            .tuples()
+            .one_or_none()
+        )
 
         if result is not None:
-            user_id_str, full_name, oidc_id = result.tuple()
+            user_id_str, full_name, oidc_id = result
             return UserResult(
                 user_id=UserId.from_str(user_id_str),
                 full_name=full_name,
@@ -104,28 +108,29 @@ def get_or_add_user_by_oidc_id(
     Get or add a user by oidc_id. Uses the existing name if found.
     """
     with db.begin() as conn:
-        result = conn.execute(
-            sa.select(models.User.user_id, models.User.full_name).where(
-                models.User.oidc_id == oidc_id
+        result = (
+            conn.execute(
+                sa.select(models.User.user_id, models.User.full_name).where(
+                    models.User.oidc_id == oidc_id
+                )
             )
-        ).one_or_none()
+            .tuples()
+            .one_or_none()
+        )
 
         if result is not None:
-            user_id, full_name = result.tuple()
+            user_id, full_name_result = result
+
             return UserResult(
                 user_id=UserId.from_str(user_id),
-                full_name=full_name,
+                full_name=full_name_result,
                 oidc_id=oidc_id,
             )
 
-        (user_id,) = (
-            conn.execute(
-                sa.insert(models.User).returning(models.User.user_id),
-                {"full_name": full_name, "oidc_id": oidc_id},
-            )
-            .one()
-            .tuple()
-        )
+        user_id = conn.execute(
+            sa.insert(models.User).returning(models.User.user_id),
+            {"full_name": full_name, "oidc_id": oidc_id},
+        ).scalar_one()
 
         return UserResult(
             user_id=UserId.from_str(user_id),
