@@ -8,20 +8,21 @@ from interview_helper.config import Settings
 
 import pytest
 
-settings = Settings()  # pyright: ignore[reportCallIssue]
 
-
-model = AzureOpenAIModel(
-    model_name=settings.azure_eval_deployment,
-    deployment_name=settings.azure_eval_deployment,
-    azure_openai_api_key=settings.azure_api_key.get_secret_value(),
-    openai_api_version=settings.azure_api_version,
-    azure_endpoint=settings.azure_api_endpoint,
-)
+@pytest.fixture
+def model():
+    settings = Settings()  # pyright: ignore[reportCallIssue]
+    return AzureOpenAIModel(
+        model_name=settings.azure_eval_deployment,
+        deployment_name=settings.azure_eval_deployment,
+        azure_openai_api_key=settings.azure_api_key.get_secret_value(),
+        openai_api_version=settings.azure_api_version,
+        azure_endpoint=settings.azure_api_endpoint,
+    )
 
 
 @pytest.mark.llm
-def test_correctness():
+def test_correctness(model: AzureOpenAIModel):
     correctness_metric = GEval(
         name="Correctness",
         criteria="Determine if the 'actual output' is correct based on the 'expected output'.",
