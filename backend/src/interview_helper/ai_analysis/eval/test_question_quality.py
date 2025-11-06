@@ -40,35 +40,18 @@ async def test_question_quality(model: AzureOpenAIModel):
             "Read the follow-up question(s) generated and determine if they focus on a relevant area we are interested in: mobility/ability to travel, ability to survive, \
             ability to communicate, ability/willingness to respond, likes/dislikes, what attracts the person's\
             attention, past and recent behaviors, or life history",
-            "You should heavily penalize questions that are not succinct and to the point",
+            "You should heavily penalize questions that are not directly followup questions to the transcript.",
+            "You should heavily penalize too many questions.",
             "Check that the question(s) are relevant and aren't already answered in the context",
         ],
-        rubric=[
-            Rubric(
-                score_range=(0, 2),
-                expected_outcome="Questions completely irrelevant to the current conversation and/or already asked/answered and/or too long or vague.",
-            ),
-            Rubric(
-                score_range=(3, 6),
-                expected_outcome="Some questions are relevant but too long or vague.",
-            ),
-            Rubric(
-                score_range=(7, 9),
-                expected_outcome="Mostly relevant and succinct questions.",
-            ),
-            Rubric(
-                score_range=(10, 10),
-                expected_outcome="100% relevant, succinct, and on point follow-up question.",
-            ),
-        ],
-        threshold=8.0,
+        threshold=0.8,
         evaluation_params=[
             LLMTestCaseParams.ACTUAL_OUTPUT,
         ],
         model=model,
     )
 
-    with open("transcript1.txt", "r") as f:
+    with open("test_samples/transcript1.txt", "r") as f:
         transcript = f.read()
 
     config = Settings()  # pyright: ignore[reportCallIssue] (using env)
