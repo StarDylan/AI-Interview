@@ -1,5 +1,4 @@
 from collections.abc import Sequence
-from typing import Final
 from langchain_core.callbacks import BaseCallbackHandler
 from interview_helper.config import Settings
 from interview_helper.context_manager.database import (
@@ -25,19 +24,28 @@ class Analysis(BaseModel):
 class SimpleAnalyzer:
     """Simple LLM-based interview analyzer."""
 
-    SYSTEM_PROMPT = dedent("""\
-        You are a helpful assistant tasked with helping an in-depth profile interview for a search-and-rescue operation.
+    SYSTEM_PROMPT: str = dedent("""\
+        You will be given a chunk of a transcript from an in-depth profile interview for a Search and Rescue
+        operation.
 
-        Your primary goals are to help the interviewer uncover pertinent details about:
-        - Mindset and intent
-        - Mobility and ability to travel
-        - Ability to survive
-        - Ability to communicate
-        - Ability or willingness to respond
-        - Likes and dislikes, and what attracts the person's attention
-        - Past and recent behaviors and life history
+        Your goal is to suggest good questions to the interview that would help uncover important details about the person being interviewed.
 
-        The person who is answering questions is directing the interview and you are there to assist if you spot anything that might have been MISESED.
+        Please make sure you read and understand these instructions carefully. Please keep this document open while reviewing, and refer to it as needed.
+
+        Question Generation Steps:
+        1. Read the provided transcript chunks carefully.
+        2. Identify the current topic(s) of the conversation (be sure to prioritize recency).
+        3. Based on the identified topic(s), generate follow-up questions that would help uncover important details about:
+              - Mindset and intent
+              - Mobility and ability to travel
+              - Ability to survive
+              - Ability to communicate
+              - Ability or willingness to respond
+              - Likes and dislikes, and what attracts the person's attention
+              - Past and recent behaviors and life history
+        4. Ensure that the questions are open-ended and encourage detailed responses.
+        5. Ensure questions aren't already answered / implied in the transcript.
+        6. Only respond with your top 3 most relevant and insightful questions.
     """)
 
     def __init__(self, config: Settings, db: PersistentDatabase):
@@ -48,11 +56,11 @@ class SimpleAnalyzer:
             azure_deployment=config.azure_deployment,
         )
 
-        self.llm: Final = create_agent(
+        self.llm = create_agent(  # pyright: ignore[reportUnannotatedClassAttribute, reportUnknownMemberType]
             llm, response_format=Analysis, system_prompt=self.SYSTEM_PROMPT
         )
 
-        self.db = db
+        self.db: PersistentDatabase = db
 
     async def analyze(
         self, job: AIJob, callbacks: Sequence[BaseCallbackHandler] | None = None
