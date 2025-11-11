@@ -43,9 +43,10 @@ class SimpleAnalyzer:
               - Ability or willingness to respond
               - Likes and dislikes, and what attracts the person's attention
               - Past and recent behaviors and life history
-        4. Ensure that the questions are open-ended and encourage detailed responses.
+        4. Ensure that the questions are open-ended and encourage detailed responses. Be brief, but specific.
         5. Ensure questions aren't already answered / implied in the transcript.
-        6. Only respond with your top 3 most relevant and insightful questions.
+        6. Limit each question to a single inquiry. It should be very scannable and easy to understand.
+        7. Only respond with your top 3 most relevant and insightful questions.
     """)
 
     def __init__(self, config: Settings, db: PersistentDatabase):
