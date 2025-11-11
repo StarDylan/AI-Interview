@@ -393,8 +393,11 @@ class AppContextManager:
                         )
                         results = await self.ai_processor.analyze(job)
 
-                    for result in results.text:
-                        add_ai_analysis(self.db, project_id=job.project_id, text=result)
+                    for result in results.questions:
+                        # TODO(span_highlighting): store grounding span too
+                        add_ai_analysis(
+                            self.db, project_id=job.project_id, text=result.question
+                        )
 
                     logger.info(results)
 
@@ -409,9 +412,12 @@ class AppContextManager:
                         if session in self.active_sessions:
                             ws = await self.get(session, WEBSOCKET)
                             if ws:
-                                for result in results.text:
+                                for result in results.questions:
                                     # TODO: Make these messages idempotent so we don't get duplicated.
-                                    await ws.send_message(AIResultMessage(text=result))
+                                    # TODO(span_highlighting): send grounding span too
+                                    await ws.send_message(
+                                        AIResultMessage(text=result.question)
+                                    )
                                     logger.info(f"Sending {result} to {session}")
 
                 except Exception:
