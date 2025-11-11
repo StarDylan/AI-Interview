@@ -135,7 +135,7 @@ docker run -it --rm -p 8080:8080 -v docs:/usr/local/structurizr structurizr/lite
 To run the LLM eval tests, in the `backend/` dir run:
 
 ```
-uv run deepeval test run -m "llm"  .\src\interview_helper\ai_analysis\eval\test_example.py
+uv run deepeval test run -m "llm"  .\src\interview_helper\ai_analysis\eval
 ```
 
 ## Features
