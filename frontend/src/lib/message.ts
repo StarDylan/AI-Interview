@@ -72,6 +72,7 @@ export interface ProjectMetadataMessage {
 
 export interface DismissAIAnalysis {
     type: typeof MessageType.DISMISS_AI_ANALYSIS;
+    timestamp: string;
     analysis_id: string;
 }
 
