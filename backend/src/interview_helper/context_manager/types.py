@@ -101,5 +101,11 @@ class AIJob:
 
 
 @dataclass(frozen=True)
+class AIQuestion:
+    question: str
+    grounding_span: str
+
+
+@dataclass(frozen=True)
 class AIResult:
-    text: list[str]
+    questions: list[AIQuestion]
