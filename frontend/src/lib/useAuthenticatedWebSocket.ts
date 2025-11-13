@@ -83,6 +83,11 @@ export function useAuthenticatedWebSocket(projectId?: string) {
             });
 
             if (!ticketResponse.ok) {
+                if (ticketResponse.status === 429) {
+                    throw new Error(
+                        "Rate limit exceeded. Too many connection attempts. Please wait a moment and try again.",
+                    );
+                }
                 throw new Error(
                     `Failed to obtain authentication ticket: ${ticketResponse.status}`,
                 );

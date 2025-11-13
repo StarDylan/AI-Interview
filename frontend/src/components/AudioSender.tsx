@@ -1,15 +1,17 @@
 import {
+    ActionIcon,
     Affix,
+    Alert,
     Badge,
     Box,
     Button,
     Center,
-    Divider,
     Group,
     Loader,
     Paper,
     ScrollArea,
     Stack,
+    Tabs,
     Text,
     Title,
 } from "@mantine/core";
@@ -18,6 +20,8 @@ import {
     IconAlertTriangle,
     IconBulb,
     IconMicrophone,
+    IconX,
+    IconAlertCircle,
 } from "@tabler/icons-react";
 import { createWebRTCClient } from "../lib/webrtc";
 import { useCallback, useEffect, useRef, useState } from "react";
@@ -28,31 +32,94 @@ import {
     type TranscriptionMessage,
     type CatchupMessage,
     type ProjectMetadataMessage,
+    type AnalysisRow,
 } from "../lib/message";
 
 // Optional: a tiny Insights panel component so we keep the page clean
-function InsightsPanel({ insights }: { insights: string[] }) {
+function InsightsPanel({
+    insights,
+    onDismiss,
+}: {
+    insights: AnalysisRow[];
+    onDismiss: (analysisId: string) => void;
+}) {
+    const activeInsights = insights.filter((a) => !a.is_dismissed);
+    const dismissedInsights = insights.filter((a) => a.is_dismissed);
+
+    const renderInsight = (
+        analysis: AnalysisRow,
+        showDismissButton: boolean,
+    ) => (
+        <Group key={analysis.analysis_id} gap="xs" align="flex-start">
+            <IconAlertTriangle size={14} style={{ marginTop: 2 }} />
+            <Stack gap={4} style={{ flex: 1 }}>
+                <Text size="sm">{analysis.text}</Text>
+                {analysis.span && (
+                    <Text size="xs" c="dimmed" fs="italic">
+                        "{analysis.span}"
+                    </Text>
+                )}
+            </Stack>
+            {showDismissButton && (
+                <ActionIcon
+                    size="sm"
+                    variant="subtle"
+                    color="gray"
+                    onClick={() => onDismiss(analysis.analysis_id)}
+                    aria-label="Dismiss insight"
+                >
+                    <IconX size={14} />
+                </ActionIcon>
+            )}
+        </Group>
+    );
+
     return (
         <Paper shadow="md" radius="lg" p="md" withBorder>
-            <Group gap="xs" align="center">
+            <Group gap="xs" align="center" mb="sm">
                 <IconBulb size={18} />
                 <Title order={5}>Insights</Title>
             </Group>
-            <Divider my="sm" />
-            <Stack gap="xs">
-                {insights.length === 0 ? (
-                    <Text c="dimmed" size="sm">
-                        No insights yet — they’ll show up here in real time.
-                    </Text>
-                ) : (
-                    insights.map((tip, i) => (
-                        <Group key={i} gap="xs">
-                            <IconAlertTriangle size={14} />
-                            <Text size="sm">{tip}</Text>
-                        </Group>
-                    ))
-                )}
-            </Stack>
+
+            <Tabs defaultValue="active">
+                <Tabs.List>
+                    <Tabs.Tab value="active">Active</Tabs.Tab>
+                    <Tabs.Tab value="dismissed">Dismissed</Tabs.Tab>
+                </Tabs.List>
+
+                <Tabs.Panel value="active" pt="md">
+                    <Stack gap="xs">
+                        {activeInsights.length === 0 ? (
+                            <Text c="dimmed" size="sm">
+                                No active insights yet — they'll show up here in
+                                real time.
+                            </Text>
+                        ) : (
+                            activeInsights
+                                .reverse()
+                                .map((analysis) =>
+                                    renderInsight(analysis, true),
+                                )
+                        )}
+                    </Stack>
+                </Tabs.Panel>
+
+                <Tabs.Panel value="dismissed" pt="md">
+                    <Stack gap="xs">
+                        {dismissedInsights.length === 0 ? (
+                            <Text c="dimmed" size="sm">
+                                No dismissed insights.
+                            </Text>
+                        ) : (
+                            dismissedInsights
+                                .reverse()
+                                .map((analysis) =>
+                                    renderInsight(analysis, false),
+                                )
+                        )}
+                    </Stack>
+                </Tabs.Panel>
+            </Tabs>
         </Paper>
     );
 }
@@ -71,14 +138,51 @@ export function AudioSender() {
 
     const [transcript, setTranscript] = useState("");
 
-    const [insights, setInsights] = useState<string[]>([]);
+    const [insights, setInsights] = useState<AnalysisRow[]>([]);
     const [projectName, setProjectName] = useState<string | null>(null);
+    const [showError, setShowError] = useState(false);
 
     const ws = useWebSocket();
+
+    // Delay showing errors to prevent flash on page refresh/reconnect
+    useEffect(() => {
+        if (ws.error) {
+            // Wait 2 seconds before showing the error
+            const timer = setTimeout(() => {
+                setShowError(true);
+            }, 500);
+            return () => clearTimeout(timer);
+        } else {
+            // Clear error immediately when it's resolved
+            setShowError(false);
+        }
+    }, [ws.error]);
 
     // Hold the webrtc client instance
     const webrtcClient = useRef<ReturnType<typeof createWebRTCClient> | null>(
         null,
+    );
+
+    // Handle dismissing an insight
+    const handleDismissInsight = useCallback(
+        (analysisId: string) => {
+            // Update local state immediately
+            setInsights((prevState) =>
+                prevState.map((insight) =>
+                    insight.analysis_id === analysisId
+                        ? { ...insight, is_dismissed: true }
+                        : insight,
+                ),
+            );
+
+            // Send dismiss message to backend
+            ws.sendMessage({
+                type: MessageType.DISMISS_AI_ANALYSIS,
+                timestamp: new Date().toISOString(),
+                analysis_id: analysisId,
+            });
+        },
+        [ws],
     );
 
     // Scroll to bottom when transcript changes
@@ -151,9 +255,26 @@ export function AudioSender() {
     // Register Insight Message
     useEffect(() => {
         const handleAIResults = (message: AIResultMessage) => {
-            setInsights((prevState: string[]) =>
-                prevState.concat([message.text]),
-            );
+            setInsights((prevState: AnalysisRow[]) => {
+                // Use analysis_id as idempotency token - replace any existing analysis with same ID
+                const newInsights = [...prevState];
+
+                for (const newAnalysis of message.insights) {
+                    const existingIndex = newInsights.findIndex(
+                        (a) => a.analysis_id === newAnalysis.analysis_id,
+                    );
+
+                    if (existingIndex !== -1) {
+                        // Replace existing analysis
+                        newInsights[existingIndex] = newAnalysis;
+                    } else {
+                        // Add new analysis
+                        newInsights.push(newAnalysis);
+                    }
+                }
+
+                return newInsights;
+            });
         };
 
         ws.registerMessageHandler("ai_result", handleAIResults);
@@ -225,128 +346,168 @@ export function AudioSender() {
 
     return (
         <Box
-            // Full-bleed page container
             style={{
                 height: "100dvh",
                 width: "100%",
                 display: "flex",
-                flexDirection: isMobile ? "column" : "row",
-                gap: "var(--mantine-spacing-md)",
-                padding: "var(--mantine-spacing-md)",
-                boxSizing: "border-box",
+                flexDirection: "column",
             }}
         >
-            {/* Mobile: Insights at the top; Desktop: at the right */}
-            {isMobile && (
-                <Box style={{ flex: "0 0 auto" }}>
-                    <InsightsPanel insights={insights} />
+            {/* WebSocket Error Banner - Full Width at Top */}
+            {showError && ws.error && (
+                <Box px="md" pt="md">
+                    <Alert
+                        icon={<IconAlertCircle size={16} />}
+                        title="Connection Error"
+                        color="red"
+                        onClose={() => {
+                            // Error will be cleared on next connection attempt
+                        }}
+                        radius="md"
+                    >
+                        {ws.error}
+                    </Alert>
                 </Box>
             )}
 
-            {/* Transcript area fills the rest */}
+            {/* Main Content Area */}
             <Box
                 style={{
-                    position: "relative",
                     flex: 1,
-                    minWidth: 0,
+                    display: "flex",
+                    flexDirection: isMobile ? "column" : "row",
+                    gap: "var(--mantine-spacing-md)",
+                    padding: "var(--mantine-spacing-md)",
+                    boxSizing: "border-box",
                     overflow: "hidden",
                 }}
             >
-                <Paper
-                    withBorder
-                    shadow="sm"
-                    radius="lg"
-                    style={{ height: "100%" }}
-                >
-                    <Stack gap="xs" style={{ height: "100%" }}>
-                        <Group justify="space-between" p="md" pb={0}>
-                            <Group gap="xs">
-                                <Title order={4}>
-                                    {projectName != null
-                                        ? `${projectName} - Transcript`
-                                        : "Transcript"}
-                                </Title>
-                                {isConnected && <Badge color="red">Live</Badge>}
-                            </Group>
-                            <Text size="sm" c={statusColor}>
-                                {statusText}
-                            </Text>
-                        </Group>
+                {/* Mobile: Insights at the top; Desktop: at the right */}
+                {isMobile && (
+                    <Box style={{ flex: "0 0 auto" }}>
+                        <InsightsPanel
+                            insights={insights}
+                            onDismiss={handleDismissInsight}
+                        />
+                    </Box>
+                )}
 
-                        <ScrollArea
-                            type="always"
-                            style={{ flex: 1 }}
-                            viewportRef={viewportRef}
-                            offsetScrollbars
-                        >
-                            <Box p="md" pt={0}>
-                                {transcript ? (
-                                    <Text
+                {/* Transcript area fills the rest */}
+                <Box
+                    style={{
+                        position: "relative",
+                        flex: 1,
+                        minWidth: 0,
+                        overflow: "hidden",
+                    }}
+                >
+                    <Paper
+                        withBorder
+                        shadow="sm"
+                        radius="lg"
+                        style={{ height: "100%" }}
+                    >
+                        <Stack gap="xs" style={{ height: "100%" }}>
+                            <Group justify="space-between" p="md" pb={0}>
+                                <Group gap="xs">
+                                    <Title order={4}>
+                                        {projectName != null
+                                            ? `${projectName} - Transcript`
+                                            : "Transcript"}
+                                    </Title>
+                                    {isConnected && (
+                                        <Badge color="red">Live</Badge>
+                                    )}
+                                </Group>
+                                <Text size="sm" c={statusColor}>
+                                    {statusText}
+                                </Text>
+                            </Group>
+
+                            <ScrollArea
+                                type="always"
+                                style={{ flex: 1 }}
+                                viewportRef={viewportRef}
+                                offsetScrollbars
+                            >
+                                <Box p="md" pt={0}>
+                                    {transcript ? (
+                                        <Text
+                                            style={{
+                                                whiteSpace: "pre-wrap",
+                                                lineHeight: 1.6,
+                                            }}
+                                        >
+                                            {transcript}
+                                        </Text>
+                                    ) : (
+                                        <Text c="dimmed" ta="center" py="xl">
+                                            Your transcript will appear here.
+                                        </Text>
+                                    )}
+                                </Box>
+                            </ScrollArea>
+                        </Stack>
+                    </Paper>
+
+                    {/* Bottom-center recording control (floating) */}
+                    <Affix position={{ bottom: 24, left: 0, right: 0 }}>
+                        <Center>
+                            <Paper shadow="xl" radius="xl" p="sm" withBorder>
+                                <Group gap="md" align="center">
+                                    <Button
+                                        variant={buttonVariant}
+                                        color={buttonColor}
+                                        leftSection={
+                                            isConnecting ? (
+                                                <Loader
+                                                    size="sm"
+                                                    color="white"
+                                                />
+                                            ) : (
+                                                <IconMicrophone size={18} />
+                                            )
+                                        }
+                                        size={isMobile ? "lg" : "xl"}
+                                        radius="xl"
+                                        loading={isConnecting}
+                                        disabled={
+                                            ws.connectionStatus !==
+                                                "connected" && !isConnecting
+                                        }
+                                        onClick={() => {
+                                            if (
+                                                connectionState ===
+                                                "disconnected"
+                                            ) {
+                                                startSendingAudio();
+                                            } else if (
+                                                connectionState === "connected"
+                                            ) {
+                                                stopSendingAudio();
+                                            }
+                                        }}
                                         style={{
-                                            whiteSpace: "pre-wrap",
-                                            lineHeight: 1.6,
+                                            minWidth: isMobile ? 200 : 260,
                                         }}
                                     >
-                                        {transcript}
-                                    </Text>
-                                ) : (
-                                    <Text c="dimmed" ta="center" py="xl">
-                                        Your transcript will appear here.
-                                    </Text>
-                                )}
-                            </Box>
-                        </ScrollArea>
-                    </Stack>
-                </Paper>
-
-                {/* Bottom-center recording control (floating) */}
-                <Affix position={{ bottom: 24, left: 0, right: 0 }}>
-                    <Center>
-                        <Paper shadow="xl" radius="xl" p="sm" withBorder>
-                            <Group gap="md" align="center">
-                                <Button
-                                    variant={buttonVariant}
-                                    color={buttonColor}
-                                    leftSection={
-                                        isConnecting ? (
-                                            <Loader size="sm" color="white" />
-                                        ) : (
-                                            <IconMicrophone size={18} />
-                                        )
-                                    }
-                                    size={isMobile ? "lg" : "xl"}
-                                    radius="xl"
-                                    loading={isConnecting}
-                                    disabled={
-                                        ws.connectionStatus !== "connected" &&
-                                        !isConnecting
-                                    }
-                                    onClick={() => {
-                                        if (
-                                            connectionState === "disconnected"
-                                        ) {
-                                            startSendingAudio();
-                                        } else if (
-                                            connectionState === "connected"
-                                        ) {
-                                            stopSendingAudio();
-                                        }
-                                    }}
-                                    style={{ minWidth: isMobile ? 200 : 260 }}
-                                >
-                                    {buttonText}
-                                </Button>
-                            </Group>
-                        </Paper>
-                    </Center>
-                </Affix>
-            </Box>
-
-            {!isMobile && (
-                <Box style={{ flex: "0 0 340px" }}>
-                    <InsightsPanel insights={insights} />
+                                        {buttonText}
+                                    </Button>
+                                </Group>
+                            </Paper>
+                        </Center>
+                    </Affix>
                 </Box>
-            )}
+
+                {!isMobile && (
+                    <Box style={{ flex: "0 0 340px" }}>
+                        <InsightsPanel
+                            insights={insights}
+                            onDismiss={handleDismissInsight}
+                        />
+                    </Box>
+                )}
+            </Box>
         </Box>
     );
 }

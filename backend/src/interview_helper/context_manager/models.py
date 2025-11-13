@@ -69,6 +69,28 @@ class AIAnalysis(Base):
 
     text: Mapped[str] = mapped_column(sa.Text, nullable=False)
 
+    span: Mapped[str] = mapped_column(sa.Text, nullable=True)
+
+
+class DismissedAIAnalysis(Base):
+    __tablename__: str = "dismissed_ai_analyses"
+
+    dismissed_analysis_id: Mapped[str] = mapped_column(
+        sa.String(26), primary_key=True, server_default=text("ulid()")
+    )
+
+    analysis_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("ai_analyses.analysis_id"), nullable=False
+    )
+
+    user_id: Mapped[str] = mapped_column(
+        sa.String(26), ForeignKey("users.user_id"), nullable=False
+    )
+
+    created_at: Mapped[DateTime] = mapped_column(
+        sa.DateTime, nullable=False, server_default=sa.func.now()
+    )
+
 
 class Project(Base):
     __tablename__: str = "project"

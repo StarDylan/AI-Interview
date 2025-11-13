@@ -1,7 +1,9 @@
 from datetime import datetime
-from typing import Optional, Dict, Any, Literal, Annotated, Union
+from typing import Any, Literal, Annotated
 
 from pydantic import BaseModel, Field
+
+from interview_helper.context_manager.database import AnalysisRow
 
 # WARNING: When adding new message types,
 # be sure that type is unique across all message types.
@@ -16,7 +18,7 @@ class TranscriptionMessage(BaseModel):
 class AIResultMessage(BaseModel):
     type: Literal["ai_result"] = "ai_result"
     timestamp: datetime = Field(default_factory=datetime.now)
-    text: str
+    insights: list[AnalysisRow]
 
 
 class ErrorMessage(BaseModel):
@@ -24,7 +26,7 @@ class ErrorMessage(BaseModel):
     timestamp: datetime = Field(default_factory=datetime.now)
     error_code: str
     message: str
-    session_id: Optional[str] = None
+    session_id: str | None = None
 
 
 class WebRTCMessage(BaseModel):
@@ -34,7 +36,7 @@ class WebRTCMessage(BaseModel):
 
     type: Literal["offer", "answer", "ice_candidate"]
     timestamp: datetime = Field(default_factory=datetime.now)
-    data: Dict[str, Any]
+    data: dict[str, Any]
 
 
 class PingMessage(BaseModel):
@@ -46,7 +48,7 @@ class CatchupMessage(BaseModel):
     type: Literal["catchup"] = "catchup"
     timestamp: datetime = Field(default_factory=datetime.now)
     transcript: str
-    insights: list[str]
+    insights: list[AnalysisRow]
 
 
 class ProjectMetadataMessage(BaseModel):
@@ -56,15 +58,22 @@ class ProjectMetadataMessage(BaseModel):
     project_name: str
 
 
-WebSocketMessage = Union[
-    ErrorMessage,
-    TranscriptionMessage,
-    WebRTCMessage,
-    PingMessage,
-    AIResultMessage,
-    CatchupMessage,
-    ProjectMetadataMessage,
-]
+class DismissAIAnalysis(BaseModel):
+    type: Literal["dismiss_ai_analysis"] = "dismiss_ai_analysis"
+    timestamp: datetime = Field(default_factory=datetime.now)
+    analysis_id: str
+
+
+WebSocketMessage = (
+    ErrorMessage
+    | TranscriptionMessage
+    | WebRTCMessage
+    | PingMessage
+    | AIResultMessage
+    | CatchupMessage
+    | ProjectMetadataMessage
+    | DismissAIAnalysis
+)
 
 
 class Envelope(BaseModel):

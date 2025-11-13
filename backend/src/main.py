@@ -4,6 +4,7 @@ from interview_helper.ai_analysis.ai_analysis import FakeAnalyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.messages import (
+    DismissAIAnalysis,
     PingMessage,
     CatchupMessage,
     ProjectMetadataMessage,
@@ -40,6 +41,7 @@ from interview_helper.audio_stream_handler.audio_stream_handler import (
 from interview_helper.context_manager.database import (
     ProjectListing,
     create_new_project,
+    dismiss_ai_analysis,
     get_all_projects,
     get_or_add_user_by_oidc_id,
     get_project_by_id,
@@ -476,6 +478,10 @@ async def websocket_endpoint(
                     await handle_webrtc_message(context, message)
                 elif isinstance(message, PingMessage):
                     await cws.send_message(PingMessage())
+                elif isinstance(message, DismissAIAnalysis):
+                    dismiss_ai_analysis(
+                        session_manager.db, message.analysis_id, ticket.user_id
+                    )
                 # handle other message types...
     except WebSocketDisconnect:
         await context.teardown()
