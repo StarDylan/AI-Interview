@@ -34,7 +34,7 @@ class SimpleAnalyzer:
 
         You will receive a chunk of transcript from an in-depth profile interview for a Search and Rescue operation.
 
-        Your ONLY job: propose the top 3 direct follow-up questions that are explicitly grounded in the CURRENT transcript chunk.
+        Your ONLY job: propose UP TO the top 3 direct follow-up questions that are explicitly grounded in the CURRENT transcript chunk.
 
         Rules (follow strictly):
         1) Grounding: For EACH question, include a short verbatim quote (<= 25 words) from the transcript that the question is responding to. If you can't quote it, don't ask it.
