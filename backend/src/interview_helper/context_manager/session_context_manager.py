@@ -394,9 +394,11 @@ class AppContextManager:
                         results = await self.ai_processor.analyze(job)
 
                     for result in results.questions:
-                        # TODO(span_highlighting): store grounding span too
                         add_ai_analysis(
-                            self.db, project_id=job.project_id, text=result.question
+                            self.db,
+                            project_id=job.project_id,
+                            text=result.question,
+                            span=result.grounding_span,
                         )
 
                     logger.info(results)

@@ -1,4 +1,5 @@
 from collections.abc import Sequence
+from pydantic import BaseModel
 from sqlalchemy.sql.sqltypes import DateTime
 from typing import TypedDict
 from interview_helper.context_manager.types import ProjectId, SessionId
@@ -292,30 +293,67 @@ def get_project_by_id(
         }
 
 
-def get_all_ai_analyses(db: PersistentDatabase, project_id: ProjectId) -> list[str]:
+class AnalysisRow(BaseModel):
+    analysis_id: str
+    text: str
+    span: str | None
+    is_dismissed: bool
+
+
+def get_all_ai_analyses(
+    db: PersistentDatabase, project_id: ProjectId
+) -> list[AnalysisRow]:
     """
     Gets all AI analysis results for a project, sorted by creation date (ascending)
-    Note: Currently AIAnalysis table doesn't have project_id or created_at fields.
-    This is a placeholder implementation that returns all analyses.
+
+    Also joins with DismissedAIAnalysis to add
     """
     with db.begin() as conn:
-        rows = (
-            conn.execute(
-                sa.select(models.AIAnalysis.text)
-                .order_by(models.AIAnalysis.analysis_id.asc())
-                .where(models.AIAnalysis.project_id == str(project_id))
+        rows = conn.execute(
+            sa.select(
+                models.AIAnalysis.analysis_id,
+                models.AIAnalysis.text,
+                models.AIAnalysis.span,
+                sa.case(
+                    (models.DismissedAIAnalysis.analysis_id.isnot(None), True),
+                    else_=False,
+                ).label("is_dismissed"),
             )
-            .scalars()
-            .all()
-        )
+            .order_by(models.AIAnalysis.analysis_id.asc())
+            .outerjoin(
+                models.DismissedAIAnalysis,
+                models.AIAnalysis.analysis_id == models.DismissedAIAnalysis.analysis_id,
+            )
+            .where(models.AIAnalysis.project_id == str(project_id))
+        ).all()
 
-    return list(rows)
+    return [
+        AnalysisRow(
+            analysis_id=row.analysis_id,  # pyright: ignore[reportAny]
+            text=row.text,  # pyright: ignore[reportAny]
+            span=row.span,  # pyright: ignore[reportAny]
+            is_dismissed=row.is_dismissed,  # pyright: ignore[reportAny]
+        )
+        for row in rows
+    ]
+
+
+def dismiss_ai_analysis(db: PersistentDatabase, analysis_id: str, user_id: UserId):
+    """
+    A user dismisses an AI analysis
+    """
+    with db.begin() as conn:
+        _ = conn.execute(
+            sa.insert(models.DismissedAIAnalysis),
+            {
+                "user_id": str(user_id),
+                "analysis_id": analysis_id,
+            },
+        )
 
 
 def add_ai_analysis(
-    db: PersistentDatabase,
-    project_id: ProjectId,
-    text: str,
+    db: PersistentDatabase, project_id: ProjectId, text: str, span: str | None
 ):
     """
     Adds a transcription result, returns the transcription ID
@@ -326,5 +364,6 @@ def add_ai_analysis(
             {
                 "project_id": str(project_id),
                 "text": text,
+                "span": span,
             },
         )
