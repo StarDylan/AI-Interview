@@ -18,7 +18,7 @@ class TranscriptionMessage(BaseModel):
 class AIResultMessage(BaseModel):
     type: Literal["ai_result"] = "ai_result"
     timestamp: datetime = Field(default_factory=datetime.now)
-    text: str
+    insights: list[AnalysisRow]
 
 
 class ErrorMessage(BaseModel):

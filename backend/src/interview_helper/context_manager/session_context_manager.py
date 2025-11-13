@@ -25,6 +25,7 @@ from interview_helper.context_manager.types import (
 )
 from interview_helper.audio_stream_handler.types import AudioChunk
 from interview_helper.context_manager.database import (
+    AnalysisRow,
     PersistentDatabase,
     add_ai_analysis,
 )
@@ -393,12 +394,22 @@ class AppContextManager:
                         )
                         results = await self.ai_processor.analyze(job)
 
+                    analyses: list[AnalysisRow] = []
                     for result in results.questions:
-                        add_ai_analysis(
+                        id = add_ai_analysis(
                             self.db,
                             project_id=job.project_id,
                             text=result.question,
                             span=result.grounding_span,
+                        )
+
+                        analyses.append(
+                            AnalysisRow(
+                                analysis_id=str(id),
+                                text=result.question,
+                                span=result.grounding_span,
+                                is_dismissed=False,
+                            )
                         )
 
                     logger.info(results)
@@ -414,13 +425,10 @@ class AppContextManager:
                         if session in self.active_sessions:
                             ws = await self.get(session, WEBSOCKET)
                             if ws:
-                                for result in results.questions:
-                                    # TODO: Make these messages idempotent so we don't get duplicated.
-                                    # TODO(span_highlighting): send grounding span too
-                                    await ws.send_message(
-                                        AIResultMessage(text=result.question)
-                                    )
-                                    logger.info(f"Sending {result} to {session}")
+                                await ws.send_message(
+                                    AIResultMessage(insights=analyses)
+                                )
+                                logger.info(f"Sending {analyses} to {session}")
 
                 except Exception:
                     # Never let an exception kill the worker or the service TG

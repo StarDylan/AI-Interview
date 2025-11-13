@@ -28,10 +28,11 @@ import {
     type TranscriptionMessage,
     type CatchupMessage,
     type ProjectMetadataMessage,
+    type AnalysisRow,
 } from "../lib/message";
 
 // Optional: a tiny Insights panel component so we keep the page clean
-function InsightsPanel({ insights }: { insights: string[] }) {
+function InsightsPanel({ insights }: { insights: AnalysisRow[] }) {
     return (
         <Paper shadow="md" radius="lg" p="md" withBorder>
             <Group gap="xs" align="center">
@@ -42,15 +43,32 @@ function InsightsPanel({ insights }: { insights: string[] }) {
             <Stack gap="xs">
                 {insights.length === 0 ? (
                     <Text c="dimmed" size="sm">
-                        No insights yet — they’ll show up here in real time.
+                        No insights yet — they'll show up here in real time.
                     </Text>
                 ) : (
-                    insights.map((tip, i) => (
-                        <Group key={i} gap="xs">
-                            <IconAlertTriangle size={14} />
-                            <Text size="sm">{tip}</Text>
-                        </Group>
-                    ))
+                    insights
+                        .filter((analysis) => !analysis.is_dismissed)
+                        .reverse()
+                        .map((analysis) => (
+                            <Group
+                                key={analysis.analysis_id}
+                                gap="xs"
+                                align="flex-start"
+                            >
+                                <IconAlertTriangle
+                                    size={14}
+                                    style={{ marginTop: 2 }}
+                                />
+                                <Stack gap={4} style={{ flex: 1 }}>
+                                    <Text size="sm">{analysis.text}</Text>
+                                    {analysis.span && (
+                                        <Text size="xs" c="dimmed" fs="italic">
+                                            "{analysis.span}"
+                                        </Text>
+                                    )}
+                                </Stack>
+                            </Group>
+                        ))
                 )}
             </Stack>
         </Paper>
@@ -71,7 +89,7 @@ export function AudioSender() {
 
     const [transcript, setTranscript] = useState("");
 
-    const [insights, setInsights] = useState<string[]>([]);
+    const [insights, setInsights] = useState<AnalysisRow[]>([]);
     const [projectName, setProjectName] = useState<string | null>(null);
 
     const ws = useWebSocket();
@@ -151,9 +169,26 @@ export function AudioSender() {
     // Register Insight Message
     useEffect(() => {
         const handleAIResults = (message: AIResultMessage) => {
-            setInsights((prevState: string[]) =>
-                prevState.concat([message.text]),
-            );
+            setInsights((prevState: AnalysisRow[]) => {
+                // Use analysis_id as idempotency token - replace any existing analysis with same ID
+                const newInsights = [...prevState];
+
+                for (const newAnalysis of message.insights) {
+                    const existingIndex = newInsights.findIndex(
+                        (a) => a.analysis_id === newAnalysis.analysis_id,
+                    );
+
+                    if (existingIndex !== -1) {
+                        // Replace existing analysis
+                        newInsights[existingIndex] = newAnalysis;
+                    } else {
+                        // Add new analysis
+                        newInsights.push(newAnalysis);
+                    }
+                }
+
+                return newInsights;
+            });
         };
 
         ws.registerMessageHandler("ai_result", handleAIResults);

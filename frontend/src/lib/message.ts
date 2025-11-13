@@ -8,6 +8,7 @@ export const MessageType = {
     AI_RESULT: "ai_result",
     CATCHUP: "catchup",
     PROJECT_METADATA: "project_metadata",
+    DISMISS_AI_ANALYSIS: "dismiss_ai_analysis",
 } as const;
 
 interface OfferMessage {
@@ -45,14 +46,21 @@ export interface TranscriptionMessage {
 export interface AIResultMessage {
     type: typeof MessageType.AI_RESULT;
     timestamp: string;
+    insights: AnalysisRow[];
+}
+
+export interface AnalysisRow {
+    analysis_id: string;
     text: string;
+    span: string | null;
+    is_dismissed: boolean;
 }
 
 export interface CatchupMessage {
     type: typeof MessageType.CATCHUP;
     timestamp: string;
     transcript: string;
-    insights: string[];
+    insights: AnalysisRow[];
 }
 
 export interface ProjectMetadataMessage {
@@ -60,6 +68,11 @@ export interface ProjectMetadataMessage {
     timestamp: string;
     project_id: string;
     project_name: string;
+}
+
+export interface DismissAIAnalysis {
+    type: typeof MessageType.DISMISS_AI_ANALYSIS;
+    analysis_id: string;
 }
 
 export type SignalingMessage =
@@ -73,7 +86,8 @@ export type Message =
     | TranscriptionMessage
     | AIResultMessage
     | CatchupMessage
-    | ProjectMetadataMessage;
+    | ProjectMetadataMessage
+    | DismissAIAnalysis;
 
 export interface Envelope {
     message: Message;

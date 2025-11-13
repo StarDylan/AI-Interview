@@ -69,6 +69,19 @@ class ProjectId:
 
 
 @dataclass(frozen=True)
+class AnalysisId:
+    _analysis_id: ULID
+
+    @override
+    def __str__(self):
+        return str(self._analysis_id).lower()
+
+    @classmethod
+    def from_str(cls, analysis_id: str) -> "AnalysisId":
+        return cls(_analysis_id=cast(ULID, ULID.from_str(analysis_id.upper())))
+
+
+@dataclass(frozen=True)
 class TranscriptId:
     _transcript_id: ULID
 

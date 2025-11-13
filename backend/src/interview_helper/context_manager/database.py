@@ -2,7 +2,7 @@ from collections.abc import Sequence
 from pydantic import BaseModel
 from sqlalchemy.sql.sqltypes import DateTime
 from typing import TypedDict
-from interview_helper.context_manager.types import ProjectId, SessionId
+from interview_helper.context_manager.types import AnalysisId, ProjectId, SessionId
 from interview_helper.context_manager.types import UserId
 from alembic.config import Config
 from alembic import command
@@ -354,16 +354,18 @@ def dismiss_ai_analysis(db: PersistentDatabase, analysis_id: str, user_id: UserI
 
 def add_ai_analysis(
     db: PersistentDatabase, project_id: ProjectId, text: str, span: str | None
-):
+) -> AnalysisId:
     """
-    Adds a transcription result, returns the transcription ID
+    Adds a transcription result, returns the analysis ID
     """
     with db.begin() as conn:
-        _ = conn.execute(
-            sa.insert(models.AIAnalysis),
+        analysis_id = conn.execute(
+            sa.insert(models.AIAnalysis).returning(models.AIAnalysis.analysis_id),
             {
                 "project_id": str(project_id),
                 "text": text,
                 "span": span,
             },
-        )
+        ).scalar_one()
+
+    return AnalysisId.from_str(analysis_id)
