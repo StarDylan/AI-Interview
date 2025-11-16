@@ -6,15 +6,18 @@ import { fetchProjects } from "../lib/api";
 import type { ProjectListing } from "../lib/api";
 import AppLayout from "../AppLayout";
 import type { User } from "oidc-client-ts";
+import type { ReactNode } from "react";
 
 interface ProjectWrapperProps {
     user?: User | null;
     onSignOut?: () => void;
+    children: ReactNode;
 }
 
 export default function ProjectWrapper({
     user,
     onSignOut,
+    children,
 }: ProjectWrapperProps) {
     const { projectId } = useParams<{ projectId: string }>();
     const [projects, setProjects] = useState<ProjectListing[]>([]);
@@ -73,6 +76,8 @@ export default function ProjectWrapper({
     }
 
     return (
-        <AppLayout user={user} onSignOut={onSignOut} project={currentProject} />
+        <AppLayout user={user} onSignOut={onSignOut}>
+            {children}
+        </AppLayout>
     );
 }
