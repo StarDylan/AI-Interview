@@ -5,7 +5,7 @@ services:
       dockerfile: Dockerfile
     container_name: thesis-backend
     volumes:
-      - backend-db:/app/database.sqlite3
+      - backend-db:/app/data
       - audio-recordings:/app/audio_recordings
       - transcriptions:/app/transcriptions
     environment:

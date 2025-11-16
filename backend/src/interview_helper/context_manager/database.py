@@ -17,7 +17,7 @@ from ulid import ULID
 class PersistentDatabase:
     """A persistent database that is saved to local disk"""
 
-    DATABASE_URL = "sqlite+pysqlite:///database.sqlite3"
+    DATABASE_URL = "sqlite+pysqlite:///data/database.sqlite3"
 
     def __init__(self, engine: sa.Engine | None = None):
         if engine is None:

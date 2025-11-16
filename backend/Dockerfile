@@ -11,8 +11,8 @@ RUN apt-get update && apt-get install -y \
     portaudio19-dev \
     && rm -rf /var/lib/apt/lists/*
 
-# Create directories for audio files and transcriptions
-RUN mkdir -p audio_recordings transcriptions vosk_models
+# Create directories for audio files, transcriptions, and database
+RUN mkdir -p audio_recordings transcriptions vosk_models data
 
 # Download Vosk model
 # Use Python to create directory, download ZIP, extract, and remove ZIP

@@ -3,8 +3,11 @@ set -e
 
 echo "=> Starting backend container..."
 
+# Ensure data directory exists
+mkdir -p /app/data
+
 # Check if database exists
-if [ ! -f "database.sqlite3" ]; then
+if [ ! -f "/app/data/database.sqlite3" ]; then
     echo "Database not found. Running Alembic migrations..."
     uv run alembic upgrade head
     echo "✓ Database initialized successfully"
