@@ -28,6 +28,11 @@ echo "Scanning directory: $ASSET_DIR"
 # Iterate through each environment variable that starts with APP_PREFIX
 env | grep "^${APP_PREFIX}" | while IFS='=' read -r key value; do
 
+    # Skip the APP_PREFIX variable itself
+    if [ "$key" = "APP_PREFIX" ]; then
+        continue
+    fi
+
     # Modify the key to replace APP_PREFIX with PREFIX_
     new_key="PREFIX_${key#${APP_PREFIX}}"
 

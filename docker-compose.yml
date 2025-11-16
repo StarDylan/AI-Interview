@@ -32,9 +32,9 @@ services:
     environment:
       - APP_PREFIX=APP_
       - APP_BACKEND_URL=/api
-      - APP_SITE_URL=${SITE_URL}
-      - APP_OIDC_AUTHORITY=${OIDC_AUTHORITY}
-      - APP_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - APP_SITE_URL=${SITE_URL:?SITE_URL must be set}
+      - APP_OIDC_AUTHORITY=${OIDC_AUTHORITY:?OIDC_AUTHORITY must be set}
+      - APP_OIDC_CLIENT_ID=${OIDC_CLIENT_ID:?OIDC_CLIENT_ID must be set}
     networks:
       - thesis-network
     restart: unless-stopped

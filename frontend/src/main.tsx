@@ -6,6 +6,13 @@ import App from "./App.tsx";
 import { AuthProvider } from "react-oidc-context";
 import { OIDC_AUTHORITY, OIDC_CLIENT_ID, SITE_URL } from "./constants.ts";
 
+console.log("OIDC Config:", {
+    authority: OIDC_AUTHORITY,
+    client_id: OIDC_CLIENT_ID,
+    site_url: SITE_URL,
+    redirect_uri: `${SITE_URL}/auth/callback`,
+});
+
 const oidc_config = {
     authority: OIDC_AUTHORITY,
     client_id: OIDC_CLIENT_ID,
