@@ -6,7 +6,7 @@ from sqlalchemy.orm import (
     Mapped,
     mapped_column,
 )
-from sqlalchemy import DateTime, text
+from sqlalchemy import DateTime
 
 
 class Base(DeclarativeBase):
@@ -15,9 +15,7 @@ class Base(DeclarativeBase):
 
 class User(Base):
     __tablename__: str = "users"
-    user_id: Mapped[str] = mapped_column(
-        sa.String(26), primary_key=True, server_default=text("ulid()")
-    )
+    user_id: Mapped[str] = mapped_column(sa.String(26), primary_key=True)
     full_name: Mapped[str] = mapped_column(sa.String(100), nullable=False, unique=True)
     oidc_id: Mapped[str] = mapped_column(sa.String(255), nullable=False, unique=True)
     updated_at: Mapped[DateTime] = mapped_column(
@@ -31,9 +29,7 @@ class User(Base):
 class Transcription(Base):
     __tablename__: str = "transcriptions"
 
-    transcription_id: Mapped[str] = mapped_column(
-        sa.String(26), primary_key=True, server_default=text("ulid()")
-    )
+    transcription_id: Mapped[str] = mapped_column(sa.String(26), primary_key=True)
     project_id: Mapped[str] = mapped_column(
         sa.String(26), ForeignKey("project.project_id"), nullable=False
     )
@@ -59,9 +55,7 @@ class Transcription(Base):
 class AIAnalysis(Base):
     __tablename__: str = "ai_analyses"
 
-    analysis_id: Mapped[str] = mapped_column(
-        sa.String(26), primary_key=True, server_default=text("ulid()")
-    )
+    analysis_id: Mapped[str] = mapped_column(sa.String(26), primary_key=True)
 
     project_id: Mapped[str] = mapped_column(
         sa.String(26), ForeignKey("project.project_id"), nullable=False
@@ -75,9 +69,7 @@ class AIAnalysis(Base):
 class DismissedAIAnalysis(Base):
     __tablename__: str = "dismissed_ai_analyses"
 
-    dismissed_analysis_id: Mapped[str] = mapped_column(
-        sa.String(26), primary_key=True, server_default=text("ulid()")
-    )
+    dismissed_analysis_id: Mapped[str] = mapped_column(sa.String(26), primary_key=True)
 
     analysis_id: Mapped[str] = mapped_column(
         sa.String(26), ForeignKey("ai_analyses.analysis_id"), nullable=False
@@ -95,9 +87,7 @@ class DismissedAIAnalysis(Base):
 class Project(Base):
     __tablename__: str = "project"
 
-    project_id: Mapped[str] = mapped_column(
-        sa.String(26), primary_key=True, server_default=text("ulid()")
-    )
+    project_id: Mapped[str] = mapped_column(sa.String(26), primary_key=True)
 
     name: Mapped[str] = mapped_column(sa.Text, nullable=True)
 
