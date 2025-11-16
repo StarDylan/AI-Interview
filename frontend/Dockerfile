@@ -20,6 +20,9 @@ RUN pnpm run build
 # Production stage
 FROM nginx:alpine
 
+# Install dos2unix for line ending conversion
+RUN apk add --no-cache dos2unix
+
 # Copy built assets from builder stage
 COPY --from=builder /app/dist /usr/share/nginx/html
 

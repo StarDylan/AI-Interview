@@ -1,0 +1,68 @@
+version: '3.8'
+
+services:
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: thesis-backend
+    volumes:
+      - backend-db:/app/database.sqlite3
+      - audio-recordings:/app/audio_recordings
+      - transcriptions:/app/transcriptions
+    environment:
+      - SERVER_HOST=0.0.0.0
+      - SERVER_PORT=8000
+      - CORS_ALLOW_ORIGINS=http://localhost,http://localhost:80
+      - OIDC_AUTHORITY=${OIDC_AUTHORITY}
+      - OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+      - SITE_URL=${SITE_URL:-http://localhost}
+      - FRONTEND_REDIRECT_URI=${FRONTEND_REDIRECT_URI:-http://localhost/auth/callback}
+      - OPENAI_API_ENDPOINT=${OPENAI_API_ENDPOINT}
+      - OPENAI_API_KEY=${OPENAI_API_KEY}
+      - AZURE_DEPLOYMENT=${AZURE_DEPLOYMENT}
+      - AZURE_EVAL_DEPLOYMENT=${AZURE_EVAL_DEPLOYMENT}
+    networks:
+      - thesis-network
+    restart: unless-stopped
+
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    container_name: thesis-frontend
+    environment:
+      - APP_PREFIX=APP_
+      - APP_BACKEND_URL=/api
+      - APP_SITE_URL=http://localhost
+      - APP_OIDC_AUTHORITY=${OIDC_AUTHORITY}
+      - APP_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
+    networks:
+      - thesis-network
+    restart: unless-stopped
+
+  nginx:
+    image: nginx:alpine
+    container_name: thesis-nginx
+    ports:
+      - "80:80"
+    volumes:
+      - ./nginx.conf:/etc/nginx/nginx.conf:ro
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - thesis-network
+    restart: unless-stopped
+
+volumes:
+  backend-db:
+    driver: local
+  audio-recordings:
+    driver: local
+  transcriptions:
+    driver: local
+
+networks:
+  thesis-network:
+    driver: bridge

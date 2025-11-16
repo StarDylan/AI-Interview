@@ -1,6 +1,6 @@
 /**
  * Converts an HTTP(S) backend URL to a WS(S) WebSocket URL.
- * Falls back to wss:// if no protocol is specified.
+ * Handles both absolute URLs and relative paths.
  *
  * @param {string} backendUrl - The backend URL (from env or otherwise)
  * @returns {string} - The WebSocket-compatible URL
@@ -12,6 +12,13 @@ export function toWebSocketUrl(backendUrl: string): string {
     }
 
     try {
+        // Handle relative URLs (e.g., "/api/ws")
+        if (backendUrl.startsWith("/")) {
+            const protocol =
+                window.location.protocol === "https:" ? "wss:" : "ws:";
+            return `${protocol}//${window.location.host}${backendUrl}`;
+        }
+
         // Add default protocol if missing
         const hasProtocol = /^[a-zA-Z][a-zA-Z\d+\-.]*:\/\//.test(backendUrl);
 
