@@ -40,8 +40,12 @@ RUN uv sync --frozen
 # Copy application code
 COPY . .
 
+# Copy and make entrypoint executable
+COPY entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
+
 # Expose port
 EXPOSE 8000
 
-# Run the application
-CMD ["uv", "run", "src/main.py"]
+# Run the application via entrypoint
+ENTRYPOINT ["/app/entrypoint.sh"]
