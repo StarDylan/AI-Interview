@@ -40,9 +40,8 @@ RUN uv sync --frozen
 # Copy application code
 COPY . .
 
-
 # Expose port
 EXPOSE 8000
 
 # Run the application
-CMD ["uv", "run", "server.py"]
+CMD ["uv", "run", "src/main.py"]
