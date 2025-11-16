@@ -32,7 +32,7 @@ services:
     environment:
       - APP_PREFIX=APP_
       - APP_BACKEND_URL=/api
-      - APP_SITE_URL=${SITE_URL:-http://localhost}
+      - APP_SITE_URL=${SITE_URL}
       - APP_OIDC_AUTHORITY=${OIDC_AUTHORITY}
       - APP_OIDC_CLIENT_ID=${OIDC_CLIENT_ID}
     networks:
