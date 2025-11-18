@@ -133,7 +133,7 @@ function AppContent() {
                     (e.currentTarget.style.backgroundColor = "#4285f4")
                 }
             >
-                Sign in with Google
+                Sign in Identity Provider
             </button>
         </div>
     );
