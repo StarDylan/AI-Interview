@@ -1,18 +1,18 @@
-from jwt.exceptions import InvalidTokenError
 from pydantic import BaseModel
 from fastapi.exceptions import HTTPException
 from fastapi import status
-from typing import List, Optional, Dict, Any
+from typing import Any
 import jwt
 import httpx
-import json
 import logging
 
 logger = logging.getLogger(__name__)
 
+# pyright: reportAny=none
+
 
 class TokenError(HTTPException):
-    def __init__(self, detail: str, code=status.HTTP_401_UNAUTHORIZED):
+    def __init__(self, detail: str, code: int = status.HTTP_401_UNAUTHORIZED):
         super().__init__(
             status_code=code, detail=detail, headers={"WWW-Authenticate": "Bearer"}
         )
@@ -26,60 +26,59 @@ class TokenClaims(BaseModel):
     iat: int  # Issued-at time (epoch seconds)
 
     # ---- Recommended but optional ----
-    nbf: Optional[int] = None  # Not-before (epoch seconds)
-    jti: Optional[str] = None  # JWT ID (unique identifier for this token)
+    nbf: int | None = None  # Not-before (epoch seconds)
+    jti: str | None = None  # JWT ID (unique identifier for this token)
 
     # ---- OIDC standard claims ----
-    auth_time: Optional[int] = None  # Time of user authentication
-    nonce: Optional[str] = None  # Nonce (if supplied in the auth request)
-
+    auth_time: int | None = None  # Time of user authentication
+    nonce: str | None = None  # Nonce (if supplied in the auth request)
     # ---- Profile/email OIDC scopes ----
-    name: Optional[str] = None
-    preferred_username: Optional[str] = None
-    email: Optional[str] = None
-    email_verified: Optional[bool] = None
+    name: str | None = None
+    preferred_username: str | None = None
+    email: str | None = None
+    email_verified: bool | None = None
 
     # ---- Roles/scopes ----
-    scope: Optional[str] = None  # space-delimited list of granted scopes
-    roles: Optional[List[str]] = (
+    scope: str | None = None  # space-delimited list of granted scopes
+    roles: list[str] | None = (
         None  # IdP-specific claim (sometimes "roles", "groups", etc.)
     )
 
     # ---- Allow custom claims ----
-    extra: Dict[str, Any] = {}
+    extra: dict[str, Any] = {}  # pyright: ignore[reportExplicitAny]
 
 
 def verify_jwt_token(
     token: str, jwks_client: jwt.PyJWKClient, client_id: str, signing_algos: str
 ) -> TokenClaims:
-    try:
-        signing_key = jwks_client.get_signing_key_from_jwt(token).key
-        payload = jwt.decode(
-            token,
-            key=signing_key,
-            algorithms=signing_algos,
-        )
-    except InvalidTokenError as e:
-        raise TokenError(f"Invalid token: {e}")
+    signing_key = jwks_client.get_signing_key_from_jwt(token).key
+    payload = jwt.decode(
+        token,
+        key=signing_key,
+        algorithms=signing_algos,
+    )
+
+    # We expect a standard JWT payload dict here
+    assert isinstance(payload, dict), "Expected JWT payload to be a dictionary"
 
     # normalize scopes/roles here...
-    return TokenClaims(**payload)
+    return TokenClaims(**payload)  # pyright: ignore[reportUnknownArgumentType]
 
 
 class OIDCUserInfo(BaseModel):
     """Model for OIDC provider user information"""
 
     sub: str
-    username: Optional[str] = None
-    email: Optional[str] = None
-    email_verified: Optional[bool] = None
-    name: Optional[str] = None
-    given_name: Optional[str] = None
-    family_name: Optional[str] = None
-    picture: Optional[str] = None
-    phone_number: Optional[str] = None
-    phone_number_verified: Optional[bool] = None
-    custom_attributes: Dict[str, Any] = {}
+    username: str | None = None
+    email: str | None = None
+    email_verified: bool | None = None
+    name: str | None = None
+    given_name: str | None = None
+    family_name: str | None = None
+    picture: str | None = None
+    phone_number: str | None = None
+    phone_number_verified: bool | None = None
+    custom_attributes: dict[str, Any] = {}  # pyright: ignore[reportExplicitAny]
 
 
 async def get_user_info_from_oidc_provider(
@@ -102,57 +101,48 @@ async def get_user_info_from_oidc_provider(
     # Remove 'Bearer ' prefix if present
     clean_token = token.removeprefix("Bearer ")
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(
-                userinfo_endpoint,
-                headers={"Authorization": f"Bearer {clean_token}"},
-            )
+    async with httpx.AsyncClient() as client:
+        response = await client.get(
+            userinfo_endpoint,
+            headers={"Authorization": f"Bearer {clean_token}"},
+        )
 
-            if response.status_code != 200:
-                raise TokenError(
-                    f"Failed to get user info: {response.status_code} {response.text}",
-                    code=status.HTTP_401_UNAUTHORIZED,
-                )
+        # We expect a successful 200 from the OIDC provider for valid tokens
+        assert response.status_code == 200, (
+            f"Failed to get user info: {response.status_code} {response.text}"
+        )
 
-            user_data = response.json()
+        user_data = response.json()
 
-            # Extract standard claims
-            standard_claims = {
-                "sub",
-                "username",
-                "email",
-                "email_verified",
-                "name",
-                "given_name",
-                "family_name",
-                "picture",
-                "phone_number",
-                "phone_number_verified",
-            }
+        # Extract standard claims
+        standard_claims = {
+            "sub",
+            "username",
+            "email",
+            "email_verified",
+            "name",
+            "given_name",
+            "family_name",
+            "picture",
+            "phone_number",
+            "phone_number_verified",
+        }
 
-            # Separate standard claims from custom attributes
-            standard_user_data = {
-                k: v for k, v in user_data.items() if k in standard_claims
-            }
-            custom_attributes = {
-                k: v for k, v in user_data.items() if k not in standard_claims
-            }
+        # Separate standard claims from custom attributes
+        standard_user_data = {
+            k: v for k, v in user_data.items() if k in standard_claims
+        }
+        custom_attributes = {
+            k: v for k, v in user_data.items() if k not in standard_claims
+        }
 
-            # Add custom attributes to the standard data
-            standard_user_data["custom_attributes"] = custom_attributes
+        # Add custom attributes to the standard data
+        standard_user_data["custom_attributes"] = custom_attributes
 
-            return OIDCUserInfo(**standard_user_data)
-
-    except httpx.RequestError as e:
-        raise TokenError(f"Error connecting to OIDC provider: {e}")
-    except json.JSONDecodeError:
-        raise TokenError("Invalid response from OIDC provider")
-    except Exception as e:
-        raise TokenError(f"Failed to get user info: {e}")
+        return OIDCUserInfo(**standard_user_data)
 
 
-async def get_oidc_userinfo_endpoint(oidc_authority: str) -> str:
+def get_oidc_userinfo_endpoint(oidc_authority: str) -> str:
     """
     Get the userinfo endpoint from the OIDC provider's well-known configuration.
 
@@ -171,44 +161,21 @@ async def get_oidc_userinfo_endpoint(oidc_authority: str) -> str:
     # Construct the well-known configuration URL
     config_url = f"{oidc_authority}/.well-known/openid-configuration"
 
-    try:
-        async with httpx.AsyncClient() as client:
-            response = await client.get(config_url)
+    with httpx.Client() as client:
+        response = client.get(config_url)
 
-            if response.status_code != 200:
-                raise TokenError(
-                    f"Failed to get OIDC configuration: {response.status_code} {response.text}",
-                    code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-            config_data = response.json()
-
-            # Extract the userinfo endpoint
-            userinfo_endpoint = config_data.get("userinfo_endpoint")
-
-            if not userinfo_endpoint:
-                raise TokenError(
-                    "Userinfo endpoint not found in OIDC configuration",
-                    code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-                )
-
-            logger.info(f"Found userinfo endpoint: {userinfo_endpoint}")
-            return userinfo_endpoint
-
-    except httpx.RequestError as e:
-        raise TokenError(
-            f"Error connecting to OIDC provider: {e}",
-            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+        # We expect a successful 200 from the OIDC provider
+        assert response.status_code == 200, (
+            f"Failed to get OIDC configuration: {response.status_code} {response.text}"
         )
-    except json.JSONDecodeError:
-        raise TokenError(
-            "Invalid response from OIDC provider",
-            code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-        )
-    except Exception as e:
-        if not isinstance(e, TokenError):
-            raise TokenError(
-                f"Failed to get OIDC configuration: {e}",
-                code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            )
-        raise
+
+        config_data = response.json()
+
+        # Extract the userinfo endpoint
+        userinfo_endpoint = config_data.get("userinfo_endpoint")
+
+        # userinfo_endpoint must be present for a valid OIDC configuration
+        assert userinfo_endpoint, "Userinfo endpoint not found in OIDC configuration"
+
+        logger.info(f"Found userinfo endpoint: {userinfo_endpoint}")
+        return userinfo_endpoint
