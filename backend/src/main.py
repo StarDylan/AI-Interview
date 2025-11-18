@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 from contextlib import asynccontextmanager
-from interview_helper.ai_analysis.ai_analysis import FakeAnalyzer
+from interview_helper.ai_analysis.ai_analysis import SimpleAnalyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
 from interview_helper.context_manager.messages import (
@@ -64,7 +64,7 @@ logger = logging.getLogger(__name__)
 session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
     (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
-    ai_processer=FakeAnalyzer,
+    ai_processer=SimpleAnalyzer,
     settings=Settings(),  # pyright: ignore[reportCallIssue] (env vars)
 )
 
