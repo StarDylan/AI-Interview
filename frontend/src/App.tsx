@@ -113,7 +113,7 @@ function AppContent() {
             }}
         >
             <h1>Welcome to Interview Helper</h1>
-            <p>Please sign in with your Google account to continue.</p>
+            <p>Please sign in with your account to continue.</p>
             <button
                 onClick={() => auth.signinRedirect()}
                 style={{
