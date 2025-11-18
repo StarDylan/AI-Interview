@@ -69,9 +69,11 @@ export function useAuthenticatedWebSocket(projectId?: string) {
             setError(null);
 
             // Get backend URL from environment
-            const backendUrl =
-                import.meta.env.VITE_BACKEND_URL || "http://localhost:3000";
-            const wsUrl = backendUrl.replace("http", "ws");
+            const backendUrl = import.meta.env.VITE_BACKEND_URL || "/api";
+            // For relative URLs, construct WebSocket URL from current location
+            const wsUrl = backendUrl.startsWith("/")
+                ? `${window.location.protocol === "https:" ? "wss:" : "ws:"}//${window.location.host}${backendUrl}`
+                : backendUrl.replace("http", "ws");
 
             // Step 1: Request an authentication ticket from the backend
             const ticketResponse = await fetch(`${backendUrl}/auth/ticket`, {

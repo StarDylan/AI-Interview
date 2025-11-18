@@ -100,28 +100,6 @@ pnpm dev
 
 The frontend will be available at `https://localhost:5173` and the backend WebRTC server runs on the configured port.
 
-## Project Structure
-
-```
-├── backend/                    # Python backend
-│   ├── config/                # Configuration management
-│   ├── handlers/              # WebRTC and protocol handlers
-│   ├── models/                # Data models (Pydantic)
-│   ├── services/              # Core business logic
-│   ├── utils/                 # Utility functions
-│   ├── vosk_models/           # Speech recognition models
-│   ├── audio_recordings/      # Recorded audio files
-│   ├── transcriptions/        # Generated transcripts
-│   └── server.py              # Main server entry point
-├── frontend/                  # React frontend
-│   ├── src/                   # Source code
-│   ├── public/                # Static assets
-│   └── package.json           # Dependencies
-├── cert/                      # SSL certificates
-├── Justfile                   # Task runner commands
-└── README.md                  # This file
-```
-
 ### Structurizr
 
 See an interactive diagram of the architecture:

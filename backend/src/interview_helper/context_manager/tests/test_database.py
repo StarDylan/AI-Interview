@@ -13,11 +13,17 @@ def test_database_migrations_succeed():
         conn.execute(sa.text("SELECT 1")).scalar_one() == 1
 
 
-def test_ulid_extension_loaded():
-    engine = PersistentDatabase.new_in_memory().engine
-    with engine.connect() as conn:
-        ulid = conn.execute(sa.text("SELECT ulid()")).scalar_one()
-        assert len(ulid) > 0
+def test_ulid_generation():
+    """Test that ULIDs are generated server-side when creating users"""
+    db = PersistentDatabase.new_in_memory()
+
+    test_user_name = "ULID Test User"
+    oidc_id = "test-ulid-oidc-id"
+
+    user = get_or_add_user_by_oidc_id(db, oidc_id, test_user_name)
+
+    # ULID should be 26 characters
+    assert len(str(user.user_id)) == 26
 
 
 def test_user_addition():

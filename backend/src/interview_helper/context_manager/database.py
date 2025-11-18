@@ -8,24 +8,22 @@ from alembic.config import Config
 from alembic import command
 from pathlib import Path
 import sqlalchemy as sa
-from sqlalchemy.event import listen as sa_listen
 from contextlib import contextmanager
 from dataclasses import dataclass
 import interview_helper.context_manager.models as models
-import sqlite_ulid
+from ulid import ULID
 
 
 class PersistentDatabase:
     """A persistent database that is saved to local disk"""
 
-    DATABASE_URL = "sqlite+pysqlite:///database.sqlite3"
+    DATABASE_URL = "sqlite+pysqlite:///data/database.sqlite3"
 
     def __init__(self, engine: sa.Engine | None = None):
         if engine is None:
             engine = sa.create_engine(PersistentDatabase.DATABASE_URL)
 
         self.engine = engine
-        self._setup_extensions()
 
     @classmethod
     def new_in_memory(cls):
@@ -59,14 +57,6 @@ class PersistentDatabase:
         alembic_cfg.attributes["connectable"] = self.engine
 
         command.upgrade(alembic_cfg, "head")
-
-    def _setup_extensions(self):
-        def load_extension(conn, unused):
-            conn.enable_load_extension(True)
-            sqlite_ulid.load(conn)
-            conn.enable_load_extension(False)
-
-        sa_listen(self.engine, "connect", load_extension)
 
 
 @dataclass
@@ -128,10 +118,11 @@ def get_or_add_user_by_oidc_id(
                 oidc_id=oidc_id,
             )
 
-        user_id = conn.execute(
-            sa.insert(models.User).returning(models.User.user_id),
-            {"full_name": full_name, "oidc_id": oidc_id},
-        ).scalar_one()
+        user_id = str(ULID()).lower()
+        assert conn.execute(
+            sa.insert(models.User),
+            {"user_id": user_id, "full_name": full_name, "oidc_id": oidc_id},
+        )
 
         return UserResult(
             user_id=UserId.from_str(user_id),
@@ -150,12 +141,12 @@ def add_transcription(
     """
     Adds a transcription result, returns the transcription ID
     """
+    transcription_id = str(ULID()).lower()
     with db.begin() as conn:
-        result = conn.scalar(
-            sa.insert(models.Transcription).returning(
-                models.Transcription.transcription_id
-            ),
+        assert conn.execute(
+            sa.insert(models.Transcription),
             {
+                "transcription_id": transcription_id,
                 "user_id": str(user_id),
                 "session_id": str(session_id),
                 "project_id": str(project_id),
@@ -163,10 +154,7 @@ def add_transcription(
             },
         )
 
-    assert result, (
-        f"Transcription not created in DB! session_id: {session_id}, text:'{text}'"
-    )
-    return result
+    return transcription_id
 
 
 def get_all_transcripts(db: PersistentDatabase, project_id: ProjectId) -> list[str]:
@@ -241,18 +229,18 @@ def create_new_project(
         f"User that doesn't exist (ID: {user_id}) is trying to create project: {project_name}"
     )
 
+    project_id = str(ULID()).lower()
     with db.begin() as conn:
         result = conn.execute(
-            sa.insert(models.Project).returning(
-                models.Project.project_id, models.Project.created_at
-            ),
+            sa.insert(models.Project).returning(models.Project.created_at),
             {
+                "project_id": project_id,
                 "creator_user_id": str(user.user_id),
                 "name": project_name,
             },
         )
 
-        project_id, created_at = result.one().tuple()
+        created_at = result.scalar_one()
 
     return {
         "id": project_id,
@@ -342,10 +330,12 @@ def dismiss_ai_analysis(db: PersistentDatabase, analysis_id: str, user_id: UserI
     """
     A user dismisses an AI analysis
     """
+    dismissed_analysis_id = str(ULID()).lower()
     with db.begin() as conn:
         _ = conn.execute(
             sa.insert(models.DismissedAIAnalysis),
             {
+                "dismissed_analysis_id": dismissed_analysis_id,
                 "user_id": str(user_id),
                 "analysis_id": analysis_id,
             },
@@ -358,14 +348,16 @@ def add_ai_analysis(
     """
     Adds a transcription result, returns the analysis ID
     """
+    analysis_id = str(ULID()).lower()
     with db.begin() as conn:
-        analysis_id = conn.execute(
-            sa.insert(models.AIAnalysis).returning(models.AIAnalysis.analysis_id),
+        assert conn.execute(
+            sa.insert(models.AIAnalysis),
             {
+                "analysis_id": analysis_id,
                 "project_id": str(project_id),
                 "text": text,
                 "span": span,
             },
-        ).scalar_one()
+        )
 
     return AnalysisId.from_str(analysis_id)
