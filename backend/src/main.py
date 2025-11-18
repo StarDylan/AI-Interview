@@ -16,7 +16,6 @@ from interview_helper.security.http import (
     get_oidc_userinfo_endpoint,
 )
 from interview_helper.security.tickets import TicketResponse
-from interview_helper.context_manager.types import UserId
 from typing import Annotated
 from fastapi import Request
 from interview_helper.audio_stream_handler.audio_utils import (
@@ -26,9 +25,7 @@ import logging
 import httpx
 import jwt
 import time
-import sqlalchemy as sa
 from collections import defaultdict
-from typing import DefaultDict
 
 from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
@@ -68,7 +65,11 @@ session_manager = AppContextManager(
     # Settings gets initialized from environment variables.
     (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
     ai_processer=FakeAnalyzer,
-    settings=Settings(),  # type: ignore (env vars)
+    settings=Settings(),  # pyright: ignore[reportCallIssue] (env vars)
+)
+
+userinfo_endpoint: str = get_oidc_userinfo_endpoint(
+    session_manager.get_settings().oidc_authority
 )
 
 
@@ -121,7 +122,7 @@ TOKEN_ENDPOINT = oidc_config["token_endpoint"]
 oidc_scheme = OpenIdConnect(openIdConnectUrl=OIDC_CONFIG_URL)
 
 # Rate limiting for ticket generation (per user)
-ticket_rate_limit: DefaultDict[str, list] = defaultdict(list)
+ticket_rate_limit: dict[str, list[float]] = defaultdict(list)
 TICKET_RATE_LIMIT_PER_MINUTE = 10
 
 
@@ -212,38 +213,12 @@ async def generate_websocket_ticket(
         )
 
     client_ip = request.client.host
+    user_info = await get_user_info_from_oidc_provider(clean_token, userinfo_endpoint)
 
-    # Generate the ticket
-
-    # Get the user from the database using the token endpoint
-    # This is a temporary solution until we implement proper user lookup
-    try:
-        # Try to get the user from the database
-        with session_manager.db.begin() as conn:
-            result = conn.execute(
-                sa.text("SELECT user_id FROM users WHERE oidc_id = :oidc_id"),
-                {"oidc_id": user_claims.sub},
-            ).one_or_none()
-
-            if result is not None:
-                # User exists, create a UserId from the string
-                user_id = UserId.from_str(result.user_id)
-            else:
-                # User doesn't exist yet, use a fallback
-                # In a real implementation, we would redirect to the token endpoint
-                # or create the user here
-                logger.warning(
-                    f"User {user_claims.sub} not found in database. Using fallback."
-                )
-                raise ValueError("User not found")
-    except Exception as e:
-        # Fallback to using the token endpoint first
-        logger.warning(f"Error looking up user: {e}. Redirecting to /auth/token first.")
-        raise HTTPException(
-            status_code=status.HTTP_307_TEMPORARY_REDIRECT,
-            detail="Please authenticate with /auth/token first",
-            headers={"Location": "/auth/token"},
-        )
+    name = f"{user_info.given_name or ''} {user_info.family_name or ''}".strip()
+    user_id = get_or_add_user_by_oidc_id(
+        session_manager.db, user_claims.sub, name
+    ).user_id
 
     # Generate the ticket using the user ID
     ticket = session_manager.ticket_store.generate_ticket(user_id, client_ip)
@@ -256,130 +231,6 @@ async def generate_websocket_ticket(
         ticket_id=ticket.ticket_id,
         expires_in=int(ticket.expires_at - ticket.created_at),
     )
-
-
-@app.get("/auth/token")
-async def get_user_token(token: Annotated[str, Depends(oidc_scheme)]):
-    """
-    Get user information, create the user in the database if needed, and return a clean token.
-
-    This endpoint verifies the JWT token, then it fetches detailed user information
-    from the OIDC provider using the token and the userinfo endpoint from the
-    provider's well-known configuration.
-
-    This endpoint must be called before requesting a ticket, as it ensures the user
-    exists in the database.
-    """
-    clean_token = token.removeprefix("Bearer ")
-
-    # Verify the token first
-    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
-
-    try:
-        # Get the userinfo endpoint from the OIDC provider's configuration
-        userinfo_endpoint = await get_oidc_userinfo_endpoint(
-            session_manager.get_settings().oidc_authority
-        )
-
-        # Get detailed user info from the OIDC provider
-        user_info = await get_user_info_from_oidc_provider(
-            clean_token, userinfo_endpoint
-        )
-
-        # Get / Create user in the database
-        user_name = user_info.name or user_claims.name or "User"
-        db_user = get_or_add_user_by_oidc_id(
-            session_manager.db, user_claims.sub, user_name
-        )
-
-        # Return the combined information
-        return {
-            "token": clean_token,
-            "user": {
-                "sub": user_info.sub,
-                "name": user_info.name,
-                "email": user_info.email,
-                "picture": user_info.picture,
-                "given_name": user_info.given_name,
-                "family_name": user_info.family_name,
-                "username": user_info.username,
-                "custom_attributes": user_info.custom_attributes,
-                "db_user_id": str(db_user.user_id),  # Include the database user ID
-            },
-            "expires_at": user_claims.exp,
-        }
-    except Exception as e:
-        # Fallback to basic claims if OIDC user info fails
-        logger.warning(f"Failed to get OIDC user info: {e}. Using basic claims.")
-
-        # Get / Create user in the database using basic claims
-        user_name = user_claims.name or "User"
-        db_user = get_or_add_user_by_oidc_id(
-            session_manager.db, user_claims.sub, user_name
-        )
-
-        return {
-            "token": clean_token,
-            "user": {
-                "sub": user_claims.sub,
-                "name": user_claims.name,
-                "email": user_claims.email,
-                "picture": getattr(user_claims, "picture", None),
-                "db_user_id": str(db_user.user_id),  # Include the database user ID
-            },
-            "expires_at": user_claims.exp,
-        }
-
-
-@app.get("/secured")
-async def secured(token: Annotated[str, Depends(oidc_scheme)]):
-    """
-    Example secured endpoint that requires authentication.
-
-    This endpoint demonstrates how to use the get_oidc_userinfo_endpoint and
-    get_user_info_from_oidc_provider functions to fetch detailed user information
-    from any OIDC provider.
-    """
-    clean_token = token.removeprefix("Bearer ")
-
-    # Verify the token first
-    user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
-
-    try:
-        # Get the userinfo endpoint from the OIDC provider's configuration
-        userinfo_endpoint = await get_oidc_userinfo_endpoint(
-            session_manager.get_settings().oidc_authority
-        )
-
-        # Get detailed user info from the OIDC provider
-        user_info = await get_user_info_from_oidc_provider(
-            clean_token, userinfo_endpoint
-        )
-
-        return {
-            "message": "Access granted to secured endpoint",
-            "user": {
-                "sub": user_info.sub,
-                "name": user_info.name,
-                "email": user_info.email,
-                "picture": user_info.picture,
-                "given_name": user_info.given_name,
-                "family_name": user_info.family_name,
-                "username": user_info.username,
-                "custom_attributes": user_info.custom_attributes,
-            },
-        }
-    except Exception as e:
-        # Fallback to basic claims if OIDC user info fails
-        logger.warning(f"Failed to get OIDC user info: {e}. Using basic claims.")
-        return {
-            "message": "Access granted to secured endpoint",
-            "user": {
-                "sub": user_claims.sub,
-                "name": user_claims.name,
-                "email": user_claims.email,
-            },
-        }
 
 
 @app.websocket("/ws")
@@ -489,15 +340,17 @@ async def websocket_endpoint(
 
 
 @app.get("/project")
-def list_all_projects():
+async def list_all_projects(token: Annotated[str, Depends(oidc_scheme)]):
     """
     Returns all projects with details
     """
+    clean_token = token.removeprefix("Bearer ")
+    _user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
     return get_all_projects(session_manager.db)
 
 
 @app.post("/project")
-def create_project(
+async def create_project(
     project_name: str, token: Annotated[str, Depends(oidc_scheme)]
 ) -> ProjectListing:
     """
@@ -506,12 +359,15 @@ def create_project(
     clean_token = token.removeprefix("Bearer ")
     user_claims = verify_jwt_token(clean_token, jwks_client, CLIENT_ID, signing_algos)
 
-    user = get_or_add_user_by_oidc_id(
-        session_manager.db, user_claims.sub, user_claims.name or "No Name Found"
-    )
+    user_info = await get_user_info_from_oidc_provider(clean_token, userinfo_endpoint)
+
+    name = f"{user_info.given_name or ''} {user_info.family_name or ''}".strip()
+    user_id = get_or_add_user_by_oidc_id(
+        session_manager.db, user_claims.sub, name
+    ).user_id
 
     new_project: ProjectListing = create_new_project(
-        session_manager.db, user.user_id, project_name
+        session_manager.db, user_id, project_name
     )
 
     return new_project

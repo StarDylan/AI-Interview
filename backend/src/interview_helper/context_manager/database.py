@@ -93,7 +93,7 @@ def get_user_by_id(db: PersistentDatabase, user_id: UserId) -> UserResult | None
 
 
 def get_or_add_user_by_oidc_id(
-    db: PersistentDatabase, oidc_id: str, full_name: str
+    db: PersistentDatabase, oidc_id: str, full_name: str | None
 ) -> UserResult:
     """
     Get or add a user by oidc_id. Uses the existing name if found.
@@ -112,6 +112,20 @@ def get_or_add_user_by_oidc_id(
         if result is not None:
             user_id, full_name_result = result
 
+            # If the incoming name differs from what we have stored, update it
+            if full_name is not None and full_name_result != full_name:
+                update_result = conn.execute(
+                    sa.update(models.User)
+                    .where(models.User.user_id == user_id)
+                    .values(full_name=full_name)
+                )
+                # Ensure exactly one row was updated
+                assert update_result.rowcount == 1, (
+                    "Expected exactly one user row to be updated"
+                )
+
+                full_name_result = full_name
+
             return UserResult(
                 user_id=UserId.from_str(user_id),
                 full_name=full_name_result,
@@ -122,6 +136,10 @@ def get_or_add_user_by_oidc_id(
         assert conn.execute(
             sa.insert(models.User),
             {"user_id": user_id, "full_name": full_name, "oidc_id": oidc_id},
+        )
+
+        assert full_name is not None, (
+            f"Full name must be provided for new user with OIDC ID: {oidc_id}"
         )
 
         return UserResult(

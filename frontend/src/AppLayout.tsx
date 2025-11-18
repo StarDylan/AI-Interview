@@ -25,9 +25,13 @@ export default function AppLayout({
     const auth = useAuth();
     const navigate = useNavigate();
 
+    console.log(user?.profile);
+
     // Extract user information from OIDC user object
     const userName =
-        user?.profile?.name || user?.profile?.preferred_username || "User";
+        `${user?.profile?.given_name || ""} ${user?.profile?.family_name || ""}`.trim() ||
+        user?.profile?.preferred_username ||
+        "User";
 
     // Use first letter of name for avatar if no image
     const avatarText = userName.charAt(0).toUpperCase();
