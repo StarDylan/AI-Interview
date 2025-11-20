@@ -50,6 +50,8 @@ def test_cors_origins_list_string_parsing():
             OPENAI_API_KEY=SecretStr("sample_openai_api_key"),
             AZURE_DEPLOYMENT="gpt-5",
             AZURE_EVAL_DEPLOYMENT="gpt-4o-mini",
+            AZURE_SPEECH_KEY=None,
+            AZURE_SPEECH_REGION=None,
         )
         assert settings.cors_allow_origins == [origin1, origin2]
 
@@ -120,10 +122,53 @@ def test_settings_immutability():
         clear=True,
     ):
         # type: ignore (using mocked environment)
-        instance = Settings()
+        instance = Settings()  # pyright: ignore[reportCallIssue]
 
         with pytest.raises(ValidationError, match="frozen"):
             instance.cors_allow_origins = []
 
         with pytest.raises(ValidationError, match="frozen"):
             instance.server_host = "127.0.0.1"
+
+
+def test_azure_speech_settings():
+    with patch.dict(
+        "os.environ",
+        {
+            "CORS_ALLOW_ORIGINS": "https://localhost:3000",
+            "OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com",
+            "OIDC_CLIENT_ID": "AWS-clientID",
+            "OPENAI_API_ENDPOINT": "https://endpoint.com",
+            "OPENAI_API_KEY": "sample_openai_api_key",
+            "AZURE_DEPLOYMENT": "gpt-5",
+            "AZURE_EVAL_DEPLOYMENT": "gpt-4o-mini",
+            "AZURE_SPEECH_KEY": "abc123",
+            "AZURE_SPEECH_REGION": "westus",
+        },
+        clear=True,
+    ):
+        # (using mocked environment)
+        instance = Settings()  # pyright: ignore[reportCallIssue]
+
+        assert instance.azure_speech_key == SecretStr("abc123")
+        assert instance.azure_speech_region == "westus"
+
+
+def test_azure_speech_one_throws_error():
+    with patch.dict(
+        "os.environ",
+        {
+            "CORS_ALLOW_ORIGINS": "https://localhost:3000",
+            "OIDC_AUTHORITY": "https://cognito-idp.us-east-1.amazonaws.com",
+            "OIDC_CLIENT_ID": "AWS-clientID",
+            "OPENAI_API_ENDPOINT": "https://endpoint.com",
+            "OPENAI_API_KEY": "sample_openai_api_key",
+            "AZURE_DEPLOYMENT": "gpt-5",
+            "AZURE_EVAL_DEPLOYMENT": "gpt-4o-mini",
+            "AZURE_SPEECH_KEY": "abc123",
+        },
+        clear=True,
+    ):
+        # (using mocked environment)
+        with pytest.raises(ValueError, match="together or not at all"):
+            _instance = Settings()  # pyright: ignore[reportCallIssue]

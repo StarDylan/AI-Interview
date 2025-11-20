@@ -2,7 +2,10 @@
 from contextlib import asynccontextmanager
 from interview_helper.ai_analysis.ai_analysis import SimpleAnalyzer
 from starlette.websockets import WebSocketDisconnect
-from interview_helper.audio_stream_handler.transcriber import transcriber_consumer_pair
+from interview_helper.audio_stream_handler.transcription.transcription import (
+    azure_transcriber_consumer_pair,
+    vosk_transcriber_consumer_pair,
+)
 from interview_helper.context_manager.messages import (
     DismissAIAnalysis,
     PingMessage,
@@ -61,11 +64,24 @@ logging.basicConfig(
 
 logger = logging.getLogger(__name__)
 
+# Settings gets initialized from environment variables.
+settings = Settings()  # pyright: ignore[reportCallIssue]
+
+if settings.azure_speech_key is None:
+    transcriber_consumer_pair = vosk_transcriber_consumer_pair
+    logger.warning("No Azure Speech key found! Falling back to Vosk for STT.")
+else:
+    transcriber_consumer_pair = azure_transcriber_consumer_pair
+    logger.info("Found azure speech key. Using Azure STT")
+
+
 session_manager = AppContextManager(
-    # Settings gets initialized from environment variables.
-    (async_audio_write_to_disk_consumer_pair, transcriber_consumer_pair),
+    audio_ingest_consumers=(
+        async_audio_write_to_disk_consumer_pair,
+        transcriber_consumer_pair,
+    ),
     ai_processer=SimpleAnalyzer,
-    settings=Settings(),  # pyright: ignore[reportCallIssue] (env vars)
+    settings=settings,
 )
 
 userinfo_endpoint: str = get_oidc_userinfo_endpoint(
