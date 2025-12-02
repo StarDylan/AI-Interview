@@ -70,6 +70,12 @@ async def setup_and_get_azure_transcriber(
 
         try:
             portal.call(accept_transcript, ctx, line, ws)
+        except RuntimeError as e:
+            # Portal has been closed (connection ended), silently ignore
+            if "not running" in str(e).lower():
+                logger.debug(f"Portal closed, skipping transcript: {text[:50]}...")
+            else:
+                logger.error(f"Error sending transcription: {e}")
         except Exception as e:
             logger.error(f"Error sending transcription: {e}")
 
