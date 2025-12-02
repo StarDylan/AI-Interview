@@ -3,6 +3,7 @@ from azure.cognitiveservices.speech.transcription import ConversationTranscriber
 from vosk import KaldiRecognizer
 from wave import Wave_write
 from aiortc.rtcpeerconnection import RTCPeerConnection
+from anyio.from_thread import BlockingPortal
 
 from interview_helper.context_manager.concurrent_websocket import ConcurrentWebSocket
 from interview_helper.context_manager.types import ResourceKey
@@ -18,3 +19,5 @@ TRANSCRIBER_SESSION = ResourceKey[KaldiRecognizer]("kalidi_transcriber")
 AZURE_TRANSCRIBER = ResourceKey[ConversationTranscriber]("azure_transcriber")
 AZURE_STREAM = ResourceKey[PushAudioInputStream]("azure_push_stream")
 AZURE_AUDIO_FORMAT = ResourceKey[AudioStreamFormat]("azure_audio_format")
+
+ANYIO_BLOCKING_PORTAL = ResourceKey[BlockingPortal]("anyio_blocking_portal")

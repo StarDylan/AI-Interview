@@ -1,5 +1,7 @@
 #!/usr/bin/env python3
 from contextlib import asynccontextmanager
+
+from anyio.from_thread import BlockingPortal
 from interview_helper.ai_analysis.ai_analysis import SimpleAnalyzer
 from starlette.websockets import WebSocketDisconnect
 from interview_helper.audio_stream_handler.transcription.transcription import (
@@ -34,7 +36,10 @@ from interview_helper.config import Settings
 from interview_helper.context_manager.messages import WebRTCMessage
 from interview_helper.context_manager.session_context_manager import AppContextManager
 from interview_helper.context_manager.concurrent_websocket import ConcurrentWebSocket
-from interview_helper.context_manager.resource_keys import WEBSOCKET
+from interview_helper.context_manager.resource_keys import (
+    ANYIO_BLOCKING_PORTAL,
+    WEBSOCKET,
+)
 from interview_helper.audio_stream_handler.audio_stream_handler import (
     handle_webrtc_message,
 )
@@ -316,40 +321,42 @@ async def websocket_endpoint(
 
     try:
         async with cws:
-            await context.register(WEBSOCKET, cws)
+            async with BlockingPortal() as portal:
+                await context.register(ANYIO_BLOCKING_PORTAL, portal)
+                await context.register(WEBSOCKET, cws)
 
-            # Send catchup message with current transcript and insights
-            transcripts = get_all_transcripts(session_manager.db, project_id_typed)
-            transcript_text = " ".join(transcripts)
+                # Send catchup message with current transcript and insights
+                transcripts = get_all_transcripts(session_manager.db, project_id_typed)
+                transcript_text = " ".join(transcripts)
 
-            ai_analyses = get_all_ai_analyses(session_manager.db, project_id_typed)
-            insights = [analysis for analysis in ai_analyses if analysis]
+                ai_analyses = get_all_ai_analyses(session_manager.db, project_id_typed)
+                insights = [analysis for analysis in ai_analyses if analysis]
 
-            catchup_msg = CatchupMessage(
-                transcript=transcript_text,
-                insights=insights,
-            )
-            await cws.send_message(catchup_msg)
+                catchup_msg = CatchupMessage(
+                    transcript=transcript_text,
+                    insights=insights,
+                )
+                await cws.send_message(catchup_msg)
 
-            # Send project metadata
-            metadata_msg = ProjectMetadataMessage(
-                project_id=project["id"],
-                project_name=project["name"],
-            )
-            await cws.send_message(metadata_msg)
+                # Send project metadata
+                metadata_msg = ProjectMetadataMessage(
+                    project_id=project["id"],
+                    project_name=project["name"],
+                )
+                await cws.send_message(metadata_msg)
 
-            while True:
-                message = await cws.receive_message()
+                while True:
+                    message = await cws.receive_message()
 
-                if isinstance(message, WebRTCMessage):
-                    await handle_webrtc_message(context, message)
-                elif isinstance(message, PingMessage):
-                    await cws.send_message(PingMessage())
-                elif isinstance(message, DismissAIAnalysis):
-                    dismiss_ai_analysis(
-                        session_manager.db, message.analysis_id, ticket.user_id
-                    )
-                # handle other message types...
+                    if isinstance(message, WebRTCMessage):
+                        await handle_webrtc_message(context, message)
+                    elif isinstance(message, PingMessage):
+                        await cws.send_message(PingMessage())
+                    elif isinstance(message, DismissAIAnalysis):
+                        dismiss_ai_analysis(
+                            session_manager.db, message.analysis_id, ticket.user_id
+                        )
+                    # handle other message types...
     except WebSocketDisconnect:
         await context.teardown()
         print(f"Closed session {context.session_id} for {ticket.user_id}")

@@ -7,13 +7,13 @@ from interview_helper.context_manager.resource_keys import (
     AZURE_STREAM,
     AZURE_TRANSCRIBER,
     WEBSOCKET,
+    ANYIO_BLOCKING_PORTAL,
 )
 from interview_helper.context_manager.session_context_manager import SessionContext
 
-import os
-from anyio import from_thread, to_thread
 import numpy as np
 import logging
+import anyio.to_thread
 
 logger = logging.getLogger(__name__)
 
@@ -28,13 +28,13 @@ async def setup_and_get_azure_transcriber(
         return transcriber
 
     # --- Speech config ---
-    speech_key = os.getenv("AZURE_SPEECH_KEY")
-    speech_region = os.getenv("AZURE_SPEECH_REGION")
+    speech_key = ctx.get_settings().azure_speech_key
+    speech_region = ctx.get_settings().azure_speech_region
     if not speech_key or not speech_region:
-        raise RuntimeError("Missing AZURE_SPEECH_KEY / AZURE_SPEECH_REGION env vars")
+        raise RuntimeError("Missing AZURE_SPEECH_KEY / AZURE_SPEECH_REGION in settings")
 
     speech_config = speechsdk.SpeechConfig(
-        subscription=speech_key, region=speech_region
+        subscription=speech_key.get_secret_value(), region=speech_region
     )
     speech_config.speech_recognition_language = "en-US"
 
@@ -58,18 +58,28 @@ async def setup_and_get_azure_transcriber(
     # ---- Event handlers ----
     ws = await ctx.get_or_wait(WEBSOCKET)
 
+    # We will need to call accept_transcript from azure's thread.
+    # So we use anyio's blocking portal to hop back to our event loop.
+    portal = await ctx.get(ANYIO_BLOCKING_PORTAL)
+    assert portal is not None, "No ANYIO_BLOCKING_PORTAL in context!"
+
     def _publish_transcript_part(text: str, speaker_id: str | None):
         # Prepend speaker tag so your downstream sees who said what.
         spk = speaker_id or "Unknown"
-        line = f"[{spk}] {text}".strip()
+        line = f"[{spk}]\n{text}\n\n"
 
-        from_thread.run(accept_transcript, ctx, line, ws)
+        try:
+            portal.call(accept_transcript, ctx, line, ws)
+        except Exception as e:
+            logger.error(f"Error sending transcription: {e}")
 
     def on_transcribed(evt: speechsdk.transcription.ConversationTranscriptionEventArgs):
+        print(f"Transcribed: {evt.result.text}")
         if (
             evt.result.reason == speechsdk.ResultReason.RecognizedSpeech
             and evt.result.text
         ):
+            print(f"Emitting recognized speech: {evt.result.text}")
             _publish_transcript_part(
                 evt.result.text, getattr(evt.result, "speaker_id", None)
             )
@@ -77,7 +87,7 @@ async def setup_and_get_azure_transcriber(
     transcriber.transcribed.connect(on_transcribed)  # pyright: ignore[reportUnknownMemberType]
 
     # Start the pipeline + wait for start in seperate thread to not block event loop
-    _ = await to_thread.run_sync(transcriber.start_transcribing_async().get)
+    _ = await anyio.to_thread.run_sync(transcriber.start_transcribing_async().get)
 
     # Stash for reuse
     await ctx.register(AZURE_TRANSCRIBER, transcriber)
@@ -123,4 +133,4 @@ async def azure_transcribe_stop(ctx: SessionContext):
         stream.close()
 
     if transcriber:
-        _ = await to_thread.run_sync(transcriber.stop_transcribing_async().get)
+        _ = await anyio.to_thread.run_sync(transcriber.stop_transcribing_async().get)
