@@ -7,7 +7,6 @@ from interview_helper.context_manager.types import TranscriptId
 
 async def accept_transcript(ctx: SessionContext, text: str, ws: ConcurrentWebSocket):
     # Send transcription data over websocket
-    await ws.send_message(TranscriptionMessage(type="transcription", text=text))
 
     # Add to DB
     added_transcription_id = TranscriptId.from_str(
@@ -19,6 +18,8 @@ async def accept_transcript(ctx: SessionContext, text: str, ws: ConcurrentWebSoc
             text=text,
         )
     )
+
+    await ws.send_message(TranscriptionMessage(type="transcription", text=text))
 
     # Ensure the session is aware of it.
     await ctx.accept_transcript(text, added_transcription_id)

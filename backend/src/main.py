@@ -358,8 +358,14 @@ async def websocket_endpoint(
                         )
                     # handle other message types...
     except WebSocketDisconnect:
+        logger.info(f"WebSocket disconnected for session {context.session_id}")
+    except Exception as e:
+        logger.error(
+            f"Error in WebSocket handler for session {context.session_id}: {e}"
+        )
+    finally:
         await context.teardown()
-        print(f"Closed session {context.session_id} for {ticket.user_id}")
+        logger.info(f"Closed session {context.session_id} for user {ticket.user_id}")
 
 
 @app.get("/project")
