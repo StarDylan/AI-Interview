@@ -133,7 +133,7 @@ function AppContent() {
                     (e.currentTarget.style.backgroundColor = "#4285f4")
                 }
             >
-                Sign in Identity Provider
+                Sign in with Identity Provider
             </button>
         </div>
     );

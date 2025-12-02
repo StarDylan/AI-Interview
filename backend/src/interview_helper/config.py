@@ -1,3 +1,4 @@
+from pydantic.functional_validators import model_validator
 from pydantic_settings.main import SettingsConfigDict
 from typing import Annotated
 from pathlib import Path
@@ -65,6 +66,18 @@ class Settings(BaseSettings):
     )
     audio_recordings_dir: str = "audio_recordings"
     transcriptions_dir: str = "transcriptions"
+
+    # STT
+    azure_speech_key: SecretStr | None = Field(alias="AZURE_SPEECH_KEY", default=None)
+    azure_speech_region: str | None = Field(alias="AZURE_SPEECH_REGION", default=None)
+
+    @model_validator(mode="after")
+    def check_azure_fields_together(self):
+        if (self.azure_speech_key is None) != (self.azure_speech_region is None):
+            raise ValueError(
+                "Both AZURE_SPEECH_KEY and AZURE_SPEECH_REGION must be set together or not at all."
+            )
+        return self
 
     @property
     def min_bytes(self) -> int:
