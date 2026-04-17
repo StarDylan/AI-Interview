@@ -5,11 +5,15 @@ workspace "Thesis V2" {
     model {
         u = person "User" "A Search and Rescue interviewer"
 
-        ai = softwareSystem "LLM Inference Service" {
+        ai = softwareSystem "Azure OpenAI Service" {
             description "Processes LLM prompts and returns the result"
         }
 
-        ss = softwareSystem "Interview Helper" {
+        azure_tts = softwareSystem "Azure TTS Service" {
+            description "Converts text to speech"
+        }
+
+        ss = softwareSystem "AI Interview Helper" {
             webapp = container "Web Application" {
                description "Delivers the static content and the Interview Helper single page application."
                technology "Vite"
@@ -44,11 +48,13 @@ workspace "Thesis V2" {
             !include backend.dsl
         }
     
-        uses_relation = u -> ss.spa "Uses"
+        uses_relation = u -> ss.spa "Records interview audio"
         website_relation = u -> ss.webapp "Visits Interview Helper using" "HTTPS"
 
+        recieves_transcript_and_feedback = ss.webapp -> u "Transcript and Suggested Questions"
+
         ss.backend.analyzer -> ai "Sends queries to" "OpenAI Compliant API"
-        ss.backend.audio_processor -> ss.whisper "Sends audio to" "Websocket"
+        ss.backend.audio_processor -> azure_tts "Converts speech to text"
     }
 
     views {
