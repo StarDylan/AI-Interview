@@ -74,7 +74,8 @@ The frontend will be available at `https://localhost:5173` and the backend WebRT
 See an interactive diagram of the architecture:
 
 ```
-docker run -it --rm -p 8080:8080 -v docs:/usr/local/structurizr structurizr/lite
+cd docs
+docker run -it --rm -p 8080:8080 -v ${PWD}:/usr/local/structurizr structurizr/lite
 ```
 
 ### LLM Eval Tests
