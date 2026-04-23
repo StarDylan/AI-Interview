@@ -1,0 +1,558 @@
+{
+  "configuration" : { },
+  "description" : "Description",
+  "documentation" : {
+    "decisions" : [ {
+      "content" : "# 1. Record architecture decisions\n\nDate: 2025-08-10\n\n## Status\n\nAccepted\n\n## Context\n\nWe need to record the architectural decisions made on this project.\n\n## Decision\n\nWe will use Architecture Decision Records, as [described by Michael Nygard](http://thinkrelevance.com/blog/2011/11/15/documenting-architecture-decisions).\n\n## Consequences\n\nSee Michael Nygard's article, linked above. For a lightweight ADR toolset, see Nat Pryce's [adr-tools](https://github.com/npryce/adr-tools).\n\nSee that tool also implemented in Rust [adrs](https://github.com/joshrotenberg/adrs).\n",
+      "date" : "2025-08-10T00:00:00Z",
+      "format" : "Markdown",
+      "id" : "1",
+      "status" : "Accepted",
+      "title" : "Record architecture decisions"
+    }, {
+      "content" : "# 2. Diagram System Architecture\n\nDate: 2025-08-12\n\n## Status\n\nAccepted\n\n## Context\n\nAfter trying several times to start this project, it is clear that I need to think of an architecture before I start coding. I have tried to diagram the architecture with a whiteboard, but it just turns into a mess of boxes and lines and I wasn't able to effectively diagram it.\n\n## Decision\n\nIn order to help brainstorm, visualize and communicate the architecture, I have decided to use the [C4 model](https://c4model.com/) with Structurizr.\n\n## Consequences\n\nThis provides a structured way to represent my thoughts and ultimate architecture decisions visually. Which will make it easier to make a structure and stick to it and communicate with myself (between coding sessions) and stakeholders.\n\nThe only downside is that I am using a new language called Structurizr DSL to do this. But it is not too complex and pretty self-explainatory. It will also help with the speed of diagramming.\n\nPotentially we can also develop a CI to auto-build these diagrams for display on the Github repo.\n",
+      "date" : "2025-08-12T00:00:00Z",
+      "format" : "Markdown",
+      "id" : "2",
+      "status" : "Accepted",
+      "title" : "Diagram System Architecture"
+    }, {
+      "content" : "# 3. AnyIO as Async Backend\n\nDate: 2025-08-16\n\n## Status\n\nAccepted\n\n## Context\n\nWe need to select an async backend for this project because of the many complex real-time requirements. The main options were Trio, asyncio, and AnyIO.\n\nTrio provides excellent structured concurrency semantics, but it has limited ecosystem support. Many major event loop runners, such as uvicorn, do not support Trio directly.  \nasyncio is the default Python async library and has strong ecosystem support, but its semantics are less ergonomic than Trio.  \nAnyIO provides Trio-like structured concurrency semantics while running on either asyncio or Trio, giving us both better developer experience and compatibility with existing tooling like uvicorn.\n\n## Decision\n\nWe will use AnyIO as the async backend. This gives us the developer-friendly semantics of Trio while maintaining compatibility with the asyncio ecosystem, including uvicorn.\n\n## Consequences\n\n- We can run clean, structured async code with safer concurrency patterns.\n- We retain compatibility with asyncio-native libraries and uvicorn.\n- We cannot mix Trio-only libraries when running on asyncio.\n- Developers need to be aware of AnyIO’s cancellation and task group semantics, which differ slightly from raw asyncio.\n",
+      "date" : "2025-08-16T00:00:00Z",
+      "format" : "Markdown",
+      "id" : "3",
+      "status" : "Accepted",
+      "title" : "AnyIO as Async Backend"
+    } ]
+  },
+  "id" : 1,
+  "lastModifiedAgent" : "structurizr/diagrams/5497a1e5-9328-4714-94d8-34b93f1b20b8",
+  "lastModifiedDate" : "2026-04-23T21:03:06Z",
+  "lastModifiedUser" : "867296680",
+  "model" : {
+    "people" : [ {
+      "description" : "Search and Rescue Scribe",
+      "id" : "1",
+      "name" : "User",
+      "properties" : {
+        "structurizr.dsl.identifier" : "u"
+      },
+      "relationships" : [ {
+        "description" : "Records interview audio",
+        "destinationId" : "6",
+        "id" : "26",
+        "properties" : {
+          "structurizr.dsl.identifier" : "uses_relation"
+        },
+        "sourceId" : "1",
+        "tags" : "Relationship"
+      }, {
+        "description" : "Records interview audio",
+        "destinationId" : "5",
+        "id" : "27",
+        "linkedRelationshipId" : "26",
+        "sourceId" : "1"
+      } ],
+      "tags" : "Element,Person"
+    } ],
+    "softwareSystems" : [ {
+      "description" : "Manages user authentication",
+      "documentation" : { },
+      "id" : "2",
+      "name" : "OIDC Provider",
+      "properties" : {
+        "structurizr.dsl.identifier" : "oidc"
+      },
+      "tags" : "Element,Software System"
+    }, {
+      "description" : "Processes LLM prompts and returns the result",
+      "documentation" : { },
+      "id" : "3",
+      "name" : "LLM Service",
+      "properties" : {
+        "structurizr.dsl.identifier" : "ai"
+      },
+      "tags" : "Element,Software System"
+    }, {
+      "description" : "Converts speech to text",
+      "documentation" : { },
+      "id" : "4",
+      "name" : "STT Service",
+      "properties" : {
+        "structurizr.dsl.identifier" : "azure_stt"
+      },
+      "tags" : "Element,Software System"
+    }, {
+      "containers" : [ {
+        "description" : "Provides all the functionality of Interview Helper including recording, live interview feedback, and review.",
+        "documentation" : { },
+        "id" : "6",
+        "name" : "Frontend",
+        "properties" : {
+          "structurizr.dsl.identifier" : "ss.spa"
+        },
+        "relationships" : [ {
+          "description" : "Sends Live Interview Audio",
+          "destinationId" : "10",
+          "id" : "19",
+          "sourceId" : "6",
+          "tags" : "Relationship",
+          "technology" : "WebRTC"
+        }, {
+          "description" : "Sends Live Interview Audio",
+          "destinationId" : "9",
+          "id" : "20",
+          "linkedRelationshipId" : "19",
+          "sourceId" : "6",
+          "technology" : "WebRTC"
+        }, {
+          "description" : "Dsiplays transcript and suggested questions",
+          "destinationId" : "1",
+          "id" : "28",
+          "properties" : {
+            "structurizr.dsl.identifier" : "recieves_transcript_and_feedback"
+          },
+          "sourceId" : "6",
+          "tags" : "Relationship"
+        }, {
+          "description" : "Logs in via",
+          "destinationId" : "2",
+          "id" : "36",
+          "sourceId" : "6",
+          "tags" : "Relationship"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "TypeScript and React"
+      }, {
+        "description" : "Stores project data including AI comments, transcription, etc.",
+        "documentation" : { },
+        "id" : "7",
+        "name" : "Database",
+        "properties" : {
+          "structurizr.dsl.identifier" : "ss.db"
+        },
+        "tags" : "Element,Container,Database",
+        "technology" : "SQLite"
+      }, {
+        "documentation" : { },
+        "id" : "8",
+        "name" : "File System",
+        "properties" : {
+          "structurizr.dsl.identifier" : "ss.fs"
+        },
+        "tags" : "Element,Container,Filesystem"
+      }, {
+        "components" : [ {
+          "description" : "Handles real-time audio streaming",
+          "documentation" : { },
+          "id" : "10",
+          "name" : "Audio Stream Handler",
+          "properties" : {
+            "structurizr.dsl.identifier" : "ss.backend.audio_stream"
+          },
+          "relationships" : [ {
+            "description" : "Provides audio data to",
+            "destinationId" : "12",
+            "id" : "16",
+            "sourceId" : "10",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Stores and exposes all project/session context",
+          "documentation" : { },
+          "id" : "11",
+          "name" : "Session Context Controller",
+          "properties" : {
+            "structurizr.dsl.identifier" : "ss.backend.session_context"
+          },
+          "relationships" : [ {
+            "description" : "Reads from and writes to",
+            "destinationId" : "7",
+            "id" : "22",
+            "sourceId" : "11",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Writes audio chunks to",
+            "destinationId" : "8",
+            "id" : "24",
+            "sourceId" : "11",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Authenticates user tokens against",
+            "destinationId" : "2",
+            "id" : "38",
+            "sourceId" : "11",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Transcribes audio and performs any additional signal processing or enrichment tasks.",
+          "documentation" : { },
+          "id" : "12",
+          "name" : "Audio Processor",
+          "properties" : {
+            "structurizr.dsl.identifier" : "ss.backend.audio_processor"
+          },
+          "relationships" : [ {
+            "description" : "Provides transcription data to",
+            "destinationId" : "13",
+            "id" : "15",
+            "sourceId" : "12",
+            "tags" : "Relationship"
+          }, {
+            "description" : "Converts speech to text using",
+            "destinationId" : "4",
+            "id" : "33",
+            "sourceId" : "12",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Interpets the transcript with the project context to provide real-time feedback",
+          "documentation" : { },
+          "id" : "13",
+          "name" : "AI Analyzer",
+          "properties" : {
+            "structurizr.dsl.identifier" : "ss.backend.analyzer"
+          },
+          "relationships" : [ {
+            "description" : "Sends question generation queries to",
+            "destinationId" : "3",
+            "id" : "30",
+            "sourceId" : "13",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        }, {
+          "description" : "Manages active WebSocket connections and basic user queries.",
+          "documentation" : { },
+          "id" : "14",
+          "name" : "WebSocket Controller",
+          "properties" : {
+            "structurizr.dsl.identifier" : "ss.backend.websocket_controller"
+          },
+          "relationships" : [ {
+            "description" : "Generated questions",
+            "destinationId" : "6",
+            "id" : "17",
+            "sourceId" : "14",
+            "tags" : "Relationship",
+            "technology" : "WebSocket"
+          }, {
+            "description" : "Provides WebRTC signaling for",
+            "destinationId" : "10",
+            "id" : "21",
+            "sourceId" : "14",
+            "tags" : "Relationship"
+          } ],
+          "tags" : "Element,Component"
+        } ],
+        "description" : "Provides Interview Helper functionality.",
+        "documentation" : { },
+        "id" : "9",
+        "name" : "Backend",
+        "properties" : {
+          "structurizr.dsl.identifier" : "ss.backend"
+        },
+        "relationships" : [ {
+          "description" : "Generated questions",
+          "destinationId" : "6",
+          "id" : "18",
+          "linkedRelationshipId" : "17",
+          "sourceId" : "9",
+          "technology" : "WebSocket"
+        }, {
+          "description" : "Reads from and writes to",
+          "destinationId" : "7",
+          "id" : "23",
+          "linkedRelationshipId" : "22",
+          "sourceId" : "9"
+        }, {
+          "description" : "Writes audio chunks to",
+          "destinationId" : "8",
+          "id" : "25",
+          "linkedRelationshipId" : "24",
+          "sourceId" : "9"
+        }, {
+          "description" : "Sends question generation queries to",
+          "destinationId" : "3",
+          "id" : "31",
+          "linkedRelationshipId" : "30",
+          "sourceId" : "9"
+        }, {
+          "description" : "Converts speech to text using",
+          "destinationId" : "4",
+          "id" : "34",
+          "linkedRelationshipId" : "33",
+          "sourceId" : "9"
+        }, {
+          "description" : "Authenticates user tokens against",
+          "destinationId" : "2",
+          "id" : "39",
+          "linkedRelationshipId" : "38",
+          "sourceId" : "9"
+        } ],
+        "tags" : "Element,Container",
+        "technology" : "Python"
+      } ],
+      "documentation" : { },
+      "id" : "5",
+      "name" : "AI Interview Helper",
+      "properties" : {
+        "structurizr.dsl.identifier" : "ss"
+      },
+      "relationships" : [ {
+        "description" : "Dsiplays transcript and suggested questions",
+        "destinationId" : "1",
+        "id" : "29",
+        "linkedRelationshipId" : "28",
+        "sourceId" : "5"
+      }, {
+        "description" : "Sends question generation queries to",
+        "destinationId" : "3",
+        "id" : "32",
+        "linkedRelationshipId" : "30",
+        "sourceId" : "5"
+      }, {
+        "description" : "Converts speech to text using",
+        "destinationId" : "4",
+        "id" : "35",
+        "linkedRelationshipId" : "33",
+        "sourceId" : "5"
+      }, {
+        "description" : "Logs in via",
+        "destinationId" : "2",
+        "id" : "37",
+        "linkedRelationshipId" : "36",
+        "sourceId" : "5"
+      } ],
+      "tags" : "Element,Software System"
+    } ]
+  },
+  "name" : "Thesis V2",
+  "properties" : {
+    "structurizr.inspection.info" : "0",
+    "structurizr.inspection.ignore" : "0",
+    "structurizr.inspection.error" : "27",
+    "structurizr.inspection.warning" : "0"
+  },
+  "views" : {
+    "componentViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "containerId" : "9",
+      "description" : "All components use Python",
+      "elements" : [ {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "4",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "6",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "7",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "8",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "10",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "11",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "12",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "13",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "14",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "externalContainerBoundariesVisible" : false,
+      "key" : "Backend",
+      "name" : "Component View: AI Interview Helper - Backend",
+      "order" : 3,
+      "relationships" : [ {
+        "id" : "15"
+      }, {
+        "id" : "16"
+      }, {
+        "id" : "17"
+      }, {
+        "id" : "19"
+      }, {
+        "id" : "21"
+      }, {
+        "id" : "22"
+      }, {
+        "id" : "24"
+      }, {
+        "id" : "30"
+      }, {
+        "id" : "33"
+      }, {
+        "id" : "36"
+      }, {
+        "id" : "38"
+      } ]
+    } ],
+    "configuration" : {
+      "lastSavedView" : "Container",
+      "metadataSymbols" : "SquareBrackets",
+      "styles" : { },
+      "terminology" : { }
+    },
+    "containerViews" : [ {
+      "dimensions" : {
+        "height" : 1754,
+        "width" : 3366
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 200,
+        "y" : 679
+      }, {
+        "id" : "2",
+        "x" : 1411,
+        "y" : 159
+      }, {
+        "id" : "3",
+        "x" : 2635,
+        "y" : 159
+      }, {
+        "id" : "4",
+        "x" : 2023,
+        "y" : 159
+      }, {
+        "id" : "6",
+        "x" : 1040,
+        "y" : 704
+      }, {
+        "id" : "7",
+        "x" : 2626,
+        "y" : 714
+      }, {
+        "id" : "8",
+        "x" : 2626,
+        "y" : 1084
+      }, {
+        "id" : "9",
+        "x" : 1841,
+        "y" : 704
+      } ],
+      "externalSoftwareSystemBoundariesVisible" : false,
+      "key" : "Container",
+      "name" : "Container View: AI Interview Helper",
+      "order" : 2,
+      "relationships" : [ {
+        "id" : "18",
+        "vertices" : [ {
+          "x" : 1656,
+          "y" : 921
+        } ]
+      }, {
+        "id" : "20",
+        "vertices" : [ {
+          "x" : 1656,
+          "y" : 779
+        } ]
+      }, {
+        "id" : "23"
+      }, {
+        "id" : "25"
+      }, {
+        "id" : "26",
+        "vertices" : [ {
+          "x" : 821,
+          "y" : 759
+        } ]
+      }, {
+        "id" : "28",
+        "vertices" : [ {
+          "x" : 831,
+          "y" : 919
+        } ]
+      }, {
+        "id" : "31"
+      }, {
+        "id" : "34"
+      }, {
+        "id" : "36"
+      }, {
+        "id" : "39"
+      } ],
+      "softwareSystemId" : "5"
+    } ],
+    "systemContextViews" : [ {
+      "automaticLayout" : {
+        "edgeSeparation" : 50,
+        "nodeSeparation" : 50,
+        "rankDirection" : "LeftRight",
+        "rankSeparation" : 100,
+        "vertices" : true
+      },
+      "elements" : [ {
+        "id" : "1",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "2",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "3",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "4",
+        "x" : 0,
+        "y" : 0
+      }, {
+        "id" : "5",
+        "x" : 0,
+        "y" : 0
+      } ],
+      "enterpriseBoundaryVisible" : true,
+      "key" : "Context",
+      "name" : "System Context View: AI Interview Helper",
+      "order" : 1,
+      "relationships" : [ {
+        "id" : "27"
+      }, {
+        "id" : "29"
+      }, {
+        "id" : "32"
+      }, {
+        "id" : "35"
+      }, {
+        "id" : "37"
+      } ],
+      "softwareSystemId" : "5"
+    } ]
+  }
+}

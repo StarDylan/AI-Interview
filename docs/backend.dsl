@@ -23,14 +23,9 @@ backend = container "Backend" "Provides Interview Helper functionality." "Python
     audio_stream -> audio_processor "Provides audio data to"
 }
 
-backend.websocket_controller -> spa "Receives interview feedback and any user actions" "WebSocket"
+backend.websocket_controller -> spa "Generated questions" "WebSocket"
 spa -> backend.audio_stream "Sends Live Interview Audio" "WebRTC"
 backend.websocket_controller -> backend.audio_stream "Provides WebRTC signaling for"
 
 backend.session_context -> db "Reads from and writes to"
 backend.session_context -> fs "Writes audio chunks to"
-
-
-backend.session_context -> oidc "Authenticates user tokens against" "OIDC JSON over HTTPS"
-
-spa -> oidc "Logs in via" "HTTPS"

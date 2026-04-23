@@ -3,35 +3,29 @@ workspace "Thesis V2" {
     !adrs adr
 
     model {
-        u = person "User" "A Search and Rescue interviewer"
+        u = person "User" "Search and Rescue Scribe"
 
-        ai = softwareSystem "Azure OpenAI Service" {
+        oidc = softwareSystem "OIDC Provider" {
+            description "Manages user authentication"
+        }
+
+        ai = softwareSystem "LLM Service" {
             description "Processes LLM prompts and returns the result"
         }
 
-        azure_tts = softwareSystem "Azure TTS Service" {
-            description "Converts text to speech"
+        azure_stt = softwareSystem "STT Service" {
+            description "Converts speech to text"
         }
 
         ss = softwareSystem "AI Interview Helper" {
-            webapp = container "Web Application" {
-               description "Delivers the static content and the Interview Helper single page application."
-               technology "Vite"
-            }
-
-            spa = container "Single Page Application" {
+            spa = container "Frontend" {
                 description "Provides all the functionality of Interview Helper including recording, \
                     live interview feedback, and review."
                 technology "TypeScript and React"
             }
-
-            
-            oidc = container "OIDC Provider" {
-                description "Manages user credentials"
-            }
             
             
-            db = container "Persistent Database" {
+            db = container "Database" {
                 description "Stores project data including AI comments, transcription, etc." 
                 technology "SQLite"
                 tags "Database"
@@ -40,21 +34,21 @@ workspace "Thesis V2" {
             fs = container "File System" {
                 tags "Filesystem"
             }
-
-            whisper = container "Whisper Transcriber" {
-                description "Transcribes audio using the SOTA Whisper model"
-            }
             
             !include backend.dsl
         }
     
         uses_relation = u -> ss.spa "Records interview audio"
-        website_relation = u -> ss.webapp "Visits Interview Helper using" "HTTPS"
 
-        recieves_transcript_and_feedback = ss.webapp -> u "Transcript and Suggested Questions"
+        recieves_transcript_and_feedback = ss.spa -> u "Dsiplays transcript and suggested questions"
 
-        ss.backend.analyzer -> ai "Sends queries to" "OpenAI Compliant API"
-        ss.backend.audio_processor -> azure_tts "Converts speech to text"
+        ss.backend.analyzer -> ai "Sends question generation queries to"
+        ss.backend.audio_processor -> azure_stt "Converts speech to text using"
+
+        
+        ss.spa -> oidc "Logs in via"
+        ss.backend.session_context -> oidc "Authenticates user tokens against"
+
     }
 
     views {
@@ -67,7 +61,6 @@ workspace "Thesis V2" {
             include *
 
             
-            autolayout lr
         }
 
         component ss.backend "Backend" {
